@@ -1,0 +1,3714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CCT</title>
+<style>
+  :root{
+    --ink:#1a1a1a; --muted:#6a6a6a; --line:#e4e4e0; --paper:#f6f6f4; --panel:#fbfbfa;
+    --accent:#2f4fb0; --accent-soft:#eaeef9; --ok:#1b7f4b; --okbg:#e7f4ec;
+    --bad:#b3261e; --badbg:#fbeae9; --none:#c9c9c4;
+    --leaf:#33689a; --optional:#9a7133;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; }
+  body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    color:var(--ink); display:flex; flex-direction:column; height:100vh; }
+
+  header{ display:flex; align-items:center; gap:18px; padding:10px 18px; border-bottom:1px solid var(--line); background:#fff; flex:none; }
+  .brand{ font-weight:800; letter-spacing:.02em; font-size:16px; }
+  .modes{ display:flex; gap:4px; }
+  .mode{ font:inherit; font-size:13px; font-weight:600; border:0; background:transparent; color:var(--muted);
+    padding:7px 14px; border-radius:8px; cursor:pointer; }
+  .mode:hover{ background:var(--paper); }
+  .mode.active{ background:var(--accent-soft); color:var(--accent); }
+  /* header status cluster: connection · save · counts */
+  .pills{ display:flex; align-items:center; gap:8px; margin-left:20px; }
+  .pills .counts{ font-size:12px; color:var(--muted); margin-left:6px; white-space:nowrap; }
+  .pill{ display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600; padding:5px 11px; border-radius:20px; }
+  .pill .pdot{ width:8px; height:8px; border-radius:50%; background:var(--muted); }
+  /* connection reads as quiet context, so green means "just saved" on one pill only */
+  .pill.conn{ background:var(--paper); color:var(--muted); border:1px solid var(--line); }
+  .pill.conn.ok .pdot{ background:var(--ok); }
+  .pill.conn.wait .pdot{ background:var(--accent); animation:pulse 1s infinite; }
+  .pill.conn.bad{ background:var(--badbg); color:var(--bad); border-color:transparent; }
+  .pill.conn.bad .pdot{ background:var(--bad); }
+
+  /* truthful save-status: green=saved, blue=saving, red=failed */
+  .savestate{ display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600;
+    padding:5px 11px; border-radius:20px; }
+  .savestate .sdot{ width:8px; height:8px; border-radius:50%; }
+  .savestate.saved{ background:var(--okbg); color:var(--ok); } .savestate.saved .sdot{ background:var(--ok); }
+  .savestate.saving{ background:#e8eef9; color:var(--accent); } .savestate.saving .sdot{ background:var(--accent); animation:pulse 1s infinite; }
+  .savestate.failed{ background:var(--badbg); color:var(--bad); } .savestate.failed .sdot{ background:var(--bad); }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.3;} }
+  /* brief confirmation glow after a save lands */
+  .savestate.justsaved{ animation:savedpulse 1.5s ease-out; }
+  @keyframes savedpulse{
+    0%{ box-shadow:0 0 0 0 rgba(27,127,75,.45); transform:scale(1.05); }
+    35%{ transform:scale(1); }
+    100%{ box-shadow:0 0 0 12px rgba(27,127,75,0); transform:scale(1); }
+  }
+  .savestate .retry{ margin-left:6px; font:inherit; font-size:11px; font-weight:700; border:0; background:var(--bad); color:#fff; border-radius:5px; padding:2px 7px; cursor:pointer; display:none; }
+  .savestate.failed .retry{ display:inline-block; }
+
+  /* project zone: visually separated on the right, its own labeled group */
+  .projzone{ margin-left:auto; display:flex; align-items:center; gap:8px;
+    padding:5px 12px 5px 16px; border-left:2px solid var(--line); }
+  .projzone .pzlabel{ font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+  .projzone select{ font-size:13px; font-weight:600; max-width:200px; }
+
+  main{ display:flex; flex:1; min-height:0; }
+  .left{ width:340px; flex:none; border-right:1px solid var(--line); background:var(--panel); overflow:auto; padding:10px; }
+  .right{ flex:1; overflow:auto; padding:22px 26px; }
+
+  .lefthead{ display:flex; align-items:center; gap:8px; margin:4px 6px 10px; }
+  .lefthead .ttl{ font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  .lefthead .sys{ margin-left:auto; }
+  select,input,textarea{ font:inherit; font-size:14px; padding:7px 9px; border:1px solid var(--line); border-radius:7px; background:#fff; color:var(--ink); }
+  select.sys{ font-size:12px; padding:4px 6px; }
+
+  ul.tree, ul.tree ul{ list-style:none; margin:0; padding:0; }
+  ul.tree ul{ margin-left:14px; border-left:1px solid var(--line); padding-left:10px; }
+  .tn{ display:flex; align-items:center; gap:7px; padding:5px 7px; border-radius:7px; cursor:pointer; margin:1px 0; }
+  .tn:hover{ background:var(--paper); }
+  .tn.sel{ background:var(--accent-soft); outline:1px solid var(--accent); }
+  .tw{ width:12px; height:12px; border-radius:3px; border:1px solid rgba(0,0,0,.12); flex:none; }
+  .tn .nm{ font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* ---- alias mode (3b) ----
+     A node shows the selected system's own word for it. The point is to read
+     the tree in a vendor's vocabulary during a session with that vendor, so
+     the highlight marks WHICH names were substituted — without it you cannot
+     tell a translated name from an untranslated one, and you would quote a
+     term the vendor has never used. */
+  .aliasbtn{ font:inherit; font-size:11.5px; font-weight:700; margin-left:auto;
+    border:1px solid var(--line); background:#fff; color:var(--muted);
+    border-radius:20px; padding:3px 10px; cursor:pointer; white-space:nowrap; }
+  .aliasbtn:hover{ border-color:var(--accent); color:var(--accent); }
+  .aliasbtn.on{ background:var(--accent-soft); border-color:var(--accent); color:var(--accent); }
+  .lefthead .aliasbtn + .sys{ margin-left:6px; }
+  .tn .nm.aliased{ background:#cfe6c6; box-shadow:0 0 0 3px #cfe6c6; border-radius:4px; }
+  .tn.sel .nm.aliased{ background:#bcdcb0; box-shadow:0 0 0 3px #bcdcb0; }
+  .aliasnone{ font-size:11px; color:var(--muted); font-style:italic; margin-left:6px; }
+  .tn .mini{ font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; padding:0 4px; border-radius:10px; flex:none;
+    background:var(--accent-soft); color:var(--accent); }
+  .mini.leaf{ background:#e7eff7; color:var(--leaf);}
+  /* .mini.opt removed 2026-08-30 with the Essential checkbox — nothing renders it. */
+  /* Data elements read as a CREAM FIELD rather than a badge: the whole row is
+     tinted, borderless, so a block of them is one visual group instead of a
+     column of repeated labels. Cream is chosen because no rating palette in any
+     project uses it — the swatch still owns saturated colour, which is the
+     signal a room actually reads. Replaced a violet pill plus a left bracket,
+     which said the same thing twice and competed with the swatch. */
+  .tn.datarow{ background:#fbf3e2; border-radius:6px; }
+  .tn.datarow.sel{ background:#f6e8c8; }
+  .npill.kid.datakid{ background:#fbf3e2; color:#7a5c12; border:1px solid #f2e4c4; }
+  .npill.kid.datakid:hover{ background:#f6e8c8; border-color:#e0cb96; }
+  .datatag{ display:inline-block; font-size:11px; font-weight:700; text-transform:uppercase;
+            letter-spacing:.04em; padding:2px 8px; border-radius:10px;
+            background:#fbf3e2; color:#7a5c12; margin-bottom:8px; }
+  .addbtn.dataadd{ color:#7a5c12; border-color:#f2e4c4; }
+  .addbtn.dataadd:hover:not(:disabled){ background:#fbf3e2; }
+  .addbtn.addoff{ opacity:.35; cursor:not-allowed; }
+  .addbtn.addoff:hover{ background:transparent; }
+  .ordctl{ display:flex; gap:2px; margin-left:6px; }
+  .ordbtn{ font:inherit; font-size:10px; line-height:1; padding:3px 5px; cursor:pointer;
+           border:1px solid var(--line); background:#fff; color:var(--muted); border-radius:4px; }
+  .ordbtn:hover:not(:disabled){ background:var(--paper); color:var(--ink); }
+  .ordbtn:disabled{ opacity:.3; cursor:default; }
+  .mini.rdy{ background:var(--okbg); color:var(--ok); }
+  .mini.hold{ background:#fff0e0; color:#8a5a00; }
+  table.matrix td.heldcell{ background:#fafafa; }
+  table.matrix td.mname.heldname .mnm{ color:var(--muted); }
+  .heldtag{ font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em;
+    background:#fff0e0; color:#8a5a00; padding:0 5px; border-radius:10px; margin-left:6px; }
+  .caret{ width:12px; text-align:center; color:var(--muted); flex:none; cursor:pointer; font-size:11px; user-select:none; }
+
+  .addbar{ display:flex; gap:6px; margin:6px; padding-top:8px; border-top:1px dashed var(--line); }
+  .addbar input{ flex:1; font-size:13px; }
+  .addbar button, .btn{ font:inherit; font-size:13px; font-weight:600; background:var(--accent); color:#fff; border:0; border-radius:7px; padding:7px 12px; cursor:pointer; }
+  .btn.ghost{ background:#fff; color:var(--accent); border:1px solid var(--accent); }
+  .btn.sm{ padding:5px 9px; font-size:12px; }
+  .btn:disabled{ opacity:.5; cursor:default; }
+
+  h2{ font-size:17px; margin:0 0 2px; } .crumb{ font-size:12px; color:var(--muted); margin-bottom:16px; }
+  .field{ margin-bottom:14px; max-width:520px; } .field label{ display:block; font-size:12px; font-weight:700; color:var(--muted); margin-bottom:4px; }
+  .field input, .field textarea, .field select{ width:100%; } textarea{ min-height:60px; resize:vertical; }
+  .checks{ display:flex; gap:18px; margin:10px 0; } .checks label{ display:flex; gap:7px; align-items:center; font-size:14px; }
+  .msg{ margin:12px 0; padding:10px 12px; border-radius:8px; font-size:13px; display:none; max-width:520px; }
+  .msg.ok{ background:var(--okbg); color:var(--ok); display:block; } .msg.bad{ background:var(--badbg); color:var(--bad); display:block; white-space:pre-wrap; }
+  .empty{ color:var(--muted); font-style:italic; margin-top:30px; }
+  .legend{ display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin:2px 0 18px; }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; } .chip{ width:12px;height:12px;border-radius:3px; }
+  .rate-row{ display:flex; align-items:center; gap:10px; margin:10px 0; } .rate-row .sw{ width:14px;height:14px;border-radius:4px;border:1px solid rgba(0,0,0,.15);}
+  .saved{ font-size:12px; color:var(--ok); opacity:0; transition:opacity .2s; } .saved.show{ opacity:1; }
+  .kv{ font-size:13px; color:var(--muted); margin:6px 0; } .kv b{ color:var(--ink); font-weight:600; }
+  .rollbig{ display:inline-flex; align-items:center; gap:9px; font-size:15px; font-weight:700; margin:6px 0 14px; }
+  .rollbig .sw{ width:18px;height:18px;border-radius:5px;border:1px solid rgba(0,0,0,.15); }
+
+  /* node search (type-ahead) */
+  .searchwrap{ position:relative; margin:0 6px 8px; }
+  .searchwrap input{ width:100%; font-size:13px; padding:6px 9px; }
+  .sresults{ display:none; position:absolute; left:0; right:0; top:100%; z-index:20; margin-top:3px;
+    background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,.10);
+    max-height:300px; overflow:auto; }
+  .sresults.open{ display:block; }
+  .sres{ padding:6px 9px; cursor:pointer; border-bottom:1px solid var(--paper); }
+  .sres:last-child{ border-bottom:0; }
+  .sres.active, .sres:hover{ background:var(--accent-soft); }
+  .sres .sname{ font-size:13px; font-weight:600; display:block; }
+  .sres .sname mark{ background:#fdf0c2; color:inherit; padding:0 1px; border-radius:2px; }
+  .sres .spath{ font-size:11px; color:var(--muted); display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .snone{ padding:8px 9px; font-size:12px; color:var(--muted); font-style:italic; }
+
+  /* position navigator: ancestors ▸ current (+ sibling, + child), children beneath */
+  .navstrip{ display:flex; align-items:flex-start; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
+  .npill{ font:inherit; font-size:13px; font-weight:600; border-radius:20px; padding:6px 14px;
+    max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .npill.anc{ border:1px solid var(--line); background:#fff; color:var(--ink); cursor:pointer; }
+  .npill.anc:hover{ border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
+  .npill.cur{ background:var(--accent); color:#fff; border:1px solid var(--accent); cursor:default; }
+  .npill.kid{ background:#dbe4f8; color:var(--accent); border:1px solid #c6d3f0; cursor:pointer; font-size:12.5px; padding:5px 12px; }
+  .npill.kid:hover{ background:#cbd8f4; border-color:var(--accent); }
+  .nsep{ color:var(--none); font-size:15px; line-height:32px; }
+  .curcol{ display:flex; flex-direction:column; align-items:flex-start; gap:7px; }
+  .currow{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .kidsrow{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; max-width:640px; }
+  .addslot{ display:flex; align-items:center; min-height:32px; }
+  .addbtn{ font:inherit; font-size:12px; font-weight:600; color:var(--muted); background:transparent;
+    border:1px dashed var(--line); border-radius:20px; padding:5px 12px; cursor:pointer; }
+  .addbtn:hover{ color:var(--accent); border-color:var(--accent); background:var(--accent-soft); }
+  .addinp{ font-size:13px; padding:5px 10px; border-radius:20px; min-width:190px; }
+  .navnote{ font-size:12px; color:var(--ok); min-height:18px; margin-bottom:10px; opacity:0; transition:opacity .2s; }
+  .navnote.show{ opacity:1; }
+
+  /* multi-line paste preview (S14) */
+  .pv-list{ display:flex; flex-wrap:wrap; gap:6px; max-height:240px; overflow:auto;
+    padding:10px; border:1px solid var(--line); border-radius:8px; background:#fafbfd; margin-bottom:12px; }
+  .pv-item{ font-size:13px; background:#fff; border:1px solid var(--line); border-radius:20px; padding:4px 11px; }
+  .pv-more{ font-size:12.5px; color:var(--muted); align-self:center; padding:4px 6px; font-style:italic; }
+  .pv-note{ font-size:12.5px; line-height:1.5; margin-bottom:7px; }
+  .pv-note.warn{ color:#8a5a00; } .pv-note.info{ color:var(--muted); }
+  .pv-big{ font-size:13px; font-weight:700; color:var(--bad); margin-bottom:10px; }
+  .pv-bar{ display:flex; gap:8px; margin-top:16px; }
+
+  /* notes to administrator (B14) */
+  .notebtn{ font:inherit; font-size:12px; line-height:1; border:1px solid var(--line); background:#fff;
+    color:var(--muted); border-radius:6px; padding:2px 6px; cursor:pointer; margin-left:6px; }
+  .notebtn:hover{ color:var(--accent); border-color:var(--accent); background:var(--accent-soft); }
+  .notedot{ color:#c77700; font-size:10px; margin-left:5px; vertical-align:middle; }
+  #notesbtn.hasnotes{ background:#fff5e6; border-color:#c77700; color:#8a5a00; }
+  .notearea{ width:100%; font:inherit; font-size:13.5px; padding:9px 11px; border:1px solid var(--line);
+    border-radius:8px; resize:vertical; margin:10px 0 8px; }
+  .notecard{ border:1px solid var(--line); border-left:3px solid #c77700; border-radius:8px;
+    padding:10px 12px; margin-bottom:10px; background:#fff; }
+  .notecard.done{ border-left-color:var(--line); opacity:.62; }
+  .notehead{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
+  .notelink{ font:inherit; font-size:12.5px; font-weight:700; color:var(--accent); background:transparent;
+    border:0; padding:0; cursor:pointer; text-align:left; }
+  .notelink:disabled{ color:var(--muted); cursor:default; }
+  .notemeta{ font-size:11.5px; color:var(--muted); margin-left:auto; }
+  .notebody{ font-size:13.5px; line-height:1.5; white-space:pre-wrap; margin-bottom:8px; }
+
+  /* screenshots / evidence (S5) */
+  .matrix .cell{ position:relative; }
+  .shotfold{ position:absolute; top:2px; right:3px; width:0; height:0;
+    border-top:9px solid var(--accent); border-left:9px solid transparent; cursor:pointer; }
+  .shotfold:hover{ border-top-color:#0b3ea8; }
+  .shotmark{ color:var(--accent); font-size:10px; margin-left:5px; vertical-align:middle; }
+  .shotbtn{ font:inherit; font-size:12px; line-height:1; border:1px solid var(--line); background:#fff;
+    color:var(--muted); border-radius:6px; padding:2px 6px; cursor:pointer; margin-left:5px; }
+  .shotbtn:hover{ color:var(--accent); border-color:var(--accent); background:var(--accent-soft); }
+  .shotgrid{ display:flex; flex-wrap:wrap; gap:10px; margin:8px 0 12px; }
+  .shotcard{ width:150px; border:1px solid var(--line); border-radius:8px; padding:7px; background:#fff; }
+  .shotcard img{ width:100%; height:86px; object-fit:cover; border-radius:5px; cursor:zoom-in; display:block; }
+  .shotmeta{ font-size:11.5px; color:var(--muted); margin:5px 0 6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .shotadd{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:8px; max-width:660px; }
+  .shotadd select{ max-width:250px; }
+  .shotadd input:not([type=file]){ flex:1; min-width:150px; }
+  .shotadd input[type=file]{ display:none; }
+  .shotzone{ max-width:660px; }
+  .shotzone{ border:1px dashed var(--line); border-radius:8px; padding:11px; text-align:center;
+    font-size:12.5px; color:var(--muted); cursor:text; outline:none; }
+  .shotzone:focus{ border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
+  .shotmodal{ width:680px; }
+  .shotfull{ width:100%; border-radius:8px; display:block; }
+  .shotcap{ font-size:13.5px; margin-top:10px; }
+  .shotmeta2{ font-size:11.5px; color:var(--muted); margin-top:4px; }
+  .backchip{ font:inherit; font-size:12px; font-weight:600; border:1px solid var(--accent); background:var(--accent-soft);
+    color:var(--accent); border-radius:20px; padding:4px 11px; cursor:pointer; margin-bottom:10px; }
+  .noteres{ font-size:12.5px; color:var(--ok); border-top:1px dashed var(--line); padding-top:7px; white-space:pre-wrap; }
+  .noteres.bare{ color:var(--muted); font-style:italic; }
+  .resolvearea{ margin:2px 0 8px; }
+  .resolveslot .pv-bar{ margin-top:0; }
+
+  /* aliases */
+  .aliaslist{ display:flex; flex-direction:column; gap:6px; }
+  .aliasrow{ display:flex; align-items:center; gap:10px; padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  .acode{ font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:700; letter-spacing:.04em;
+    background:var(--paper); border:1px solid var(--line); border-radius:5px; padding:2px 7px; flex:none; cursor:help; }
+  .amid{ flex:1; min-width:0; }
+  .aterm{ font-size:13.5px; font-weight:600; }
+  .anote{ font-size:11.5px; color:var(--muted); }
+  .aliasform{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .aliasform input{ font-size:13px; }
+
+  /* stale ratings */
+  .cell.stalecell{ position:relative; }
+  .staleflag{ position:absolute; top:1px; right:2px; font-size:10px; font-weight:800; line-height:1;
+    color:#fff; background:var(--optional); border-radius:50%; width:13px; height:13px;
+    display:flex; align-items:center; justify-content:center; cursor:help; z-index:1; }
+
+  /* ===================================================================
+     B18 — THE LETTER-BOX GRID (migration 22)
+     Ported from mockup-apptypes.html, which Seebo approved in principle
+     2026-08-22. A cell is now node × system × CHANNEL, and holds one small
+     box per scale value: F P W N. Click to set, click again to clear.
+     =================================================================== */
+  .box{ display:inline-flex; align-items:center; justify-content:center;
+        width:20px; height:20px; border-radius:5px; border:1px solid #cfd3dc;
+        font-size:11px; font-weight:800; background:#fff; color:#98a0ad;
+        cursor:pointer; user-select:none; }
+  .box + .box{ margin-left:3px; }
+  .box:hover{ border-color:var(--accent); color:var(--accent); }
+  .box.on{ border-color:rgba(0,0,0,.28); box-shadow:inset 0 0 0 1px rgba(0,0,0,.06); }
+  .box.off{ cursor:not-allowed; opacity:.4; }
+  .box.off:hover{ border-color:#cfd3dc; color:#98a0ad; }
+  .boxgrp{ display:inline-flex; align-items:center; white-space:nowrap; }
+
+  /* two-row header: system, then its channels beneath */
+  th.sysname{ text-align:center; font-size:12.5px; font-weight:700;
+              padding:6px 10px; border-left:2px solid var(--line); white-space:nowrap; }
+  th.sysname .scode{ font-family:ui-monospace,Menlo,monospace; font-size:10.5px;
+                     font-weight:600; color:var(--muted); margin-left:6px; }
+  th.chan{ text-align:center; font-size:10.5px; font-weight:800; text-transform:uppercase;
+           letter-spacing:.05em; color:var(--muted); padding:5px 8px; white-space:nowrap; }
+  th.chan.first, td.cell.first{ border-left:2px solid var(--line); }
+  th.chan .csurf{ display:block; font-weight:600; text-transform:none; letter-spacing:0;
+                  font-size:9.5px; opacity:.75; }
+
+  /* ⚠ 3a — AUTHORSHIP LIVES IN THE CELL BACKGROUND, THE SUPPORT LEVEL LIVES
+     IN THE BOX. Seebo's design, and it is what made this possible: before
+     the letter-boxes the cell background WAS the rating colour, so there was
+     nowhere to put "whose is this" except a fiddly corner mark. Now the two
+     never compete.
+        blue  = yours       cream = somebody else's      white = unrated  */
+  td.cell{ padding:3px 6px; text-align:center; white-space:nowrap; background:#fff; }
+  td.cell.minecell { background:#eaf3fb; }
+  td.cell.othercell{ background:#fbf3e2; }
+  .othertick{ font-size:10px; line-height:1; color:#8a7a4e; margin-left:5px;
+              cursor:help; vertical-align:middle; }
+
+  /* channel editor in Settings -> Systems */
+  h4.chanh{ margin:22px 0 4px; font-size:14px; }
+  .chansub{ margin:0 0 12px; font-size:12.5px; color:var(--muted); max-width:70ch; }
+  .chanblock{ border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin:0 0 12px; }
+  .chansys{ font-weight:700; font-size:13px; margin-bottom:6px; }
+  /* ⚠ The settings modal was 560px when it held two columns. The channel
+     editor has five, one of them free text, so Delete fell off the right
+     edge — reported by Seebo 2026-09-01, and not reachable by resizing
+     because the modal is a fixed width, not a window. Widened here, and the
+     table below is fixed-layout so it can never overflow again regardless of
+     what a description contains. */
+  .modal.wide{ width:880px; }
+
+  .chanblock .addsys{ flex-wrap:wrap; }          /* three inputs + a button must wrap, not overflow */
+  .chanblock .addsys input.nm{ flex:1 1 160px; min-width:0; }
+  .chanblock .addsys input.cd{ flex:0 0 80px; }
+
+  /* Fixed layout + explicit widths: the inputs shrink instead of pushing the
+     row wider. overflow-x is the belt to that pair of braces, for a narrow
+     laptop where even 880px does not fit. */
+  .chanblock{ overflow-x:auto; }
+  .chanblock table.syslist{ table-layout:fixed; width:100%; }
+  .chanblock table.syslist th:nth-child(1),
+  .chanblock table.syslist td:nth-child(1){ width:20%; }
+  .chanblock table.syslist th:nth-child(2),
+  .chanblock table.syslist td:nth-child(2){ width:18%; }
+  .chanblock table.syslist th:nth-child(3),
+  .chanblock table.syslist td:nth-child(3){ width:15%; }
+  .chanblock table.syslist th:nth-child(4),
+  .chanblock table.syslist td:nth-child(4){ width:auto; }
+  .chanblock table.syslist th:nth-child(5),
+  .chanblock table.syslist td:nth-child(5){ width:74px; text-align:right; padding-right:4px; }
+  .chanblock table.syslist input{ width:100%; box-sizing:border-box; min-width:0; }
+  .chanblock table.syslist .del{ white-space:nowrap; }
+
+  /* node history (audit log) */
+  .hitem{ padding:10px 0; border-bottom:1px solid var(--line); }
+  .hitem:last-of-type{ border-bottom:0; }
+  .hhead{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .hact{ font-size:12.5px; font-weight:700; color:var(--accent); }
+  .hact.bad{ color:var(--bad); }
+  .hwhen{ font-size:12px; color:var(--muted); }
+  .hwho{ font-size:11px; color:var(--none); margin-left:auto; font-style:italic; }
+  .hdiff{ display:flex; align-items:baseline; gap:7px; flex-wrap:wrap; font-size:12.5px; margin-top:5px; padding-left:2px; }
+  .hfield{ font-weight:600; min-width:100px; color:var(--muted); }
+  .hold{ background:var(--badbg); color:var(--bad); padding:1px 6px; border-radius:4px; text-decoration:line-through; }
+  .harrow{ color:var(--none); }
+  .hnew{ background:var(--okbg); color:var(--ok); padding:1px 6px; border-radius:4px; }
+  .hsnap{ font-size:12.5px; color:var(--muted); margin-top:5px; }
+
+  /* move / re-parent block */
+  .moveblock{ margin-top:26px; padding-top:16px; border-top:1px solid var(--line); max-width:520px; }
+  .moveblock .mvttl{ font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:10px; }
+
+  /* evaluate matrix */
+  .evalbar{ display:flex; gap:26px; flex-wrap:wrap; margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--line); }
+  .evalwho{ display:flex; flex-direction:column; gap:4px; }
+  .evalwho .elbl{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  .evalwho select, .evalwho input{ min-width:200px; }
+  /* identity is stated, not chosen */
+  .evalme{ display:flex; flex-direction:column; gap:2px; min-width:200px; padding:5px 0; }
+  .evalmenm{ font-size:14px; font-weight:700; }
+  .evalmesys{ font-size:11.5px; color:var(--accent); font-weight:600; }
+  /* the column you were assigned: a usability hint, never a restriction */
+  table.matrix th.assignedcol{ box-shadow: inset 0 -3px 0 var(--accent); }
+  table.matrix th.assignedcol, table.matrix td.assignedcol{ border-left:2px solid var(--accent); border-right:2px solid var(--accent); }
+  .matrixwrap{ overflow:auto; }
+  table.matrix{ border-collapse:collapse; font-size:13px; }
+  table.matrix th, table.matrix td{ border:1px solid var(--line); }
+  table.matrix th.gut{ width:66px; min-width:66px; background:var(--paper); position:sticky; left:0; z-index:3; }
+  table.matrix td.gut{ width:66px; min-width:66px; background:#fff; position:sticky; left:0; z-index:2;
+    padding:4px 6px; text-align:center; white-space:nowrap; }
+  table.matrix td.gut .notebtn, table.matrix td.gut .shotbtn{ margin:0 1px; padding:2px 5px; }
+  table.matrix th.corner{ text-align:left; padding:8px 10px; background:var(--paper); position:sticky; left:66px; z-index:2; min-width:240px; }
+  table.matrix th.syscol{ padding:8px 10px; background:var(--paper); font-family:ui-monospace,Menlo,monospace; font-size:12px; letter-spacing:.03em; min-width:70px; cursor:help; }
+  table.matrix td.mname{ text-align:left; padding:6px 10px; background:#fff; position:sticky; left:66px; z-index:1; white-space:nowrap; }
+  table.matrix td.mname.depth1{ padding-left:24px; } table.matrix td.mname.depth2{ padding-left:40px; }
+  table.matrix td.mname.depth3{ padding-left:56px; } table.matrix td.mname.depth4{ padding-left:72px; }
+  table.matrix td.mname .mnm{ font-weight:600; }
+  table.matrix td.cell{ padding:2px; text-align:center; }
+  table.matrix .cellsel{ border:0; background:transparent; font-size:12px; width:100%; padding:5px 4px; cursor:pointer; }
+
+  /* chart controls + multi-system grid */
+  .chartctl{ display:flex; align-items:center; gap:14px; margin:2px 0 14px; }
+  .seg{ display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .seg button{ font:inherit; font-size:12.5px; font-weight:600; border:0; background:#fff; color:var(--muted); padding:6px 14px; cursor:pointer; }
+  .seg button.on{ background:var(--accent-soft); color:var(--accent); }
+  .hcard.multi{ min-width:150px; max-width:none; width:max-content; }
+  .sysgrid{ display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+  .syscell{ display:inline-flex; align-items:center; gap:3px; padding:2px 6px; border-radius:5px; border:1px solid rgba(0,0,0,.06); }
+  .syscell .sccode{ font-family:ui-monospace,Menlo,monospace; font-size:10.5px; font-weight:700; color:#333; }
+  .syscell .scnum{ font-size:12px; font-weight:800; color:#222; }
+
+  /* modal overlay for settings */
+  .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.35); display:flex; align-items:flex-start; justify-content:center; padding-top:60px; z-index:100; }
+  .modal{ background:#fff; border-radius:12px; width:560px; max-width:92vw; max-height:80vh; overflow:auto; box-shadow:0 12px 40px rgba(0,0,0,.25); }
+  .modal .mhead{ display:flex; align-items:center; padding:16px 20px; border-bottom:1px solid var(--line); position:sticky; top:0; background:#fff; }
+  .modal .mhead h3{ margin:0; font-size:16px; } .modal .mhead .x{ margin-left:auto; border:0; background:transparent; font-size:20px; cursor:pointer; color:var(--muted); line-height:1; }
+  .modal .mbody{ padding:18px 20px; }
+  .stab{ display:flex; gap:6px; margin-bottom:16px; border-bottom:1px solid var(--line); }
+  .stab button{ font:inherit; font-size:13px; font-weight:600; border:0; background:transparent; color:var(--muted); padding:8px 12px; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+  .stab button.on{ color:var(--accent); border-bottom-color:var(--accent); }
+  .syslist{ width:100%; border-collapse:collapse; margin-bottom:14px; }
+  .syslist th,.syslist td{ text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); font-size:13px; }
+  .syslist th{ font-size:11px; text-transform:uppercase; color:var(--muted); letter-spacing:.04em; }
+  .syslist input{ font-size:13px; padding:5px 7px; } .syslist .codeinp{ width:70px; text-transform:uppercase; }
+  .syslist .del{ border:0; background:transparent; color:var(--bad); cursor:pointer; font-size:12px; font-weight:600; }
+  .addsys{ display:flex; gap:8px; align-items:center; margin-top:6px; }
+  .addsys input.nm{ flex:1; } .addsys input.cd{ width:70px; text-transform:uppercase; }
+  .smsg{ font-size:12px; margin-top:8px; min-height:16px; } .smsg.bad{ color:var(--bad); } .smsg.ok{ color:var(--ok); }
+
+  /* auth: sign-in box and the header identity chip */
+  .authbox{ width:380px; }
+  .authlbl{ display:block; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:10px 0 4px; }
+  .authbox input{ width:100%; font-size:14px; padding:8px 10px; box-sizing:border-box; }
+  .authbox .btn{ margin-top:14px; width:100%; }
+  .whoslot{ display:inline-flex; align-items:center; gap:6px; }
+  .whochip{ display:inline-flex; align-items:center; gap:7px; padding:3px 10px; border:1px solid var(--line); border-radius:999px; background:#fff; }
+  .whoname{ font-size:12.5px; font-weight:700; }
+  .whorole{ font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  .whochip.norole .whorole{ color:var(--bad); }
+
+  /* horizontal chart layout */
+  .hchart{ display:flex; align-items:flex-start; gap:0; overflow:auto; padding:10px 4px; }
+  .hlevel{ display:flex; flex-direction:column; gap:14px; padding:0 26px; position:relative; justify-content:center; }
+  .hcard{ min-width:150px; max-width:190px; border:1px solid var(--line); border-left:6px solid var(--none);
+    border-radius:9px; padding:9px 11px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+  .hcard .hn{ font-weight:700; font-size:13.5px; margin-bottom:3px; }
+  .hcard .hl{ font-size:11px; color:#555; }
+  .hcard .hopt{ font-size:9.5px; font-weight:700; text-transform:uppercase; color:#9a7133; }
+  .hgroup{ display:flex; flex-direction:column; gap:14px; }
+  .hwrap{ display:flex; align-items:center; }
+  .hconn{ width:26px; flex:none; align-self:stretch; border-left:1px solid var(--line); }
+</style>
+</head>
+<body>
+<header>
+  <span class="brand">CCT</span>
+  <div class="modes">
+    <button class="mode active" data-mode="build">Build</button>
+    <button class="mode" data-mode="evaluate">Evaluate</button>
+    <button class="mode" data-mode="chart">Chart</button>
+  </div>
+
+  <div class="pills">
+    <div class="pill conn wait" id="connpill"><span class="pdot"></span><span id="conntext">Connecting…</span></div>
+    <div class="pill savestate saved" id="savestate"><span class="sdot"></span><span id="savetext">Saved</span><button class="retry" id="retrybtn">Retry</button></div>
+    <span class="counts" id="status">Loading…</span>
+  </div>
+
+  <div class="projzone">
+    <span class="pzlabel">Project</span>
+    <select id="projpick"></select>
+    <button id="newprojbtn" class="btn ghost sm">+ New</button>
+    <button id="notesbtn" class="btn ghost sm" title="Notes from evaluators">✉ Notes</button>
+    <button id="settingsbtn" class="btn ghost sm">⚙ Settings</button>
+    <span id="whoami" class="whoslot"></span>
+  </div>
+</header>
+
+<main>
+  <div class="left">
+    <div class="lefthead">
+      <span class="ttl" id="lefttitle">Structure</span>
+      <button id="aliasbtn" class="aliasbtn" title="Show each system's own word for these nodes">⇄ Aliases</button>
+      <select id="syspick" class="sys" style="display:none;"></select>
+    </div>
+    <div class="searchwrap">
+      <input id="nodesearch" placeholder="Search nodes…  (/)" autocomplete="off" spellcheck="false">
+      <div class="sresults" id="searchresults"></div>
+    </div>
+    <div id="treebox"></div>
+    <div class="addbar" id="addbar">
+      <input id="quickadd" placeholder="Add child to selected… (Enter)">
+      <button id="quickaddbtn">Add</button>
+    </div>
+    <div class="addbar" id="rootbar" style="border-top:none;padding-top:2px;">
+      <button id="newrootbtn" class="btn ghost sm" style="flex:1;">+ New top-level domain</button>
+    </div>
+  </div>
+  <div class="right" id="right"></div>
+</main>
+
+<script>
+const SUPABASE_URL="https://szvlvfgslymhlgdsjzyd.supabase.co";
+const SUPABASE_KEY="sb_publishable_oEhQnbZ6uyM3Mr1mWp7Z1Q_exCnRIfm";
+// H is deliberately a MUTABLE object, not a frozen literal. Roughly twenty call
+// sites already spread it as {...H, "Prefer": ...}; because the spread happens
+// at call time, rewriting H.Authorization in one place (applyAuthHeader, below)
+// puts the signed-in user's token on every request without touching any of
+// them. Signed out, it falls back to the publishable key — which is what keeps
+// the app working while RLS is still off.
+const H={ "apikey":SUPABASE_KEY, "Authorization":"Bearer "+SUPABASE_KEY, "Content-Type":"application/json" };
+const $=id=>document.getElementById(id);
+function el(t,c,x){ const n=document.createElement(t); if(c)n.className=c; if(x!==undefined)n.textContent=x; return n; }
+// Every request reports on the connection: reaching the server (even with a
+// 4xx) proves we're connected; only a network-level throw means we're not.
+async function api(p,o){
+  try{ const r=await fetch(SUPABASE_URL+"/rest/v1/"+p,{headers:H,...o}); setConn("ok"); return r; }
+  catch(err){ setConn("bad"); throw err; }
+}
+
+/* =========================================================================
+   AUTH  (S18 step 2a)
+
+   Hand-rolled against Supabase's auth REST endpoints rather than pulling in
+   supabase-js. The password grant is one POST and a token refresh; the library
+   would be a dependency in a file that is deliberately self-contained and
+   opened straight off disk.
+
+   ⚠ RLS IS STILL OFF. This is UX, not enforcement — the publishable key still
+   reads and writes without a token. Enforcement arrives with
+   12_rls_policies.sql, once signing in is proven to work. Nothing here can
+   lock anyone out yet, and that is on purpose.
+   ========================================================================= */
+
+const AUTH_URL   = SUPABASE_URL + "/auth/v1";
+const SESSION_KEY = "cct.session";
+
+let SESSION = null;          // { access_token, refresh_token, expires_at, user }
+
+function applyAuthHeader(){
+  H.Authorization = "Bearer " + ((SESSION && SESSION.access_token) || SUPABASE_KEY);
+}
+function loadSession(){
+  try{ SESSION = JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); }
+  catch(e){ SESSION = null; }
+  applyAuthHeader();
+  return SESSION;
+}
+function saveSession(s){
+  SESSION = s;
+  if(s) localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+  else  localStorage.removeItem(SESSION_KEY);
+  applyAuthHeader();
+}
+
+async function signIn(email, password){
+  const r = await fetch(AUTH_URL + "/token?grant_type=password", {
+    method: "POST",
+    headers: { apikey: SUPABASE_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password })
+  });
+  const body = await r.json().catch(() => ({}));
+  if(!r.ok) throw new Error(body.error_description || body.msg || body.message || ("Sign-in failed (" + r.status + ")"));
+  saveSession({
+    access_token: body.access_token,
+    refresh_token: body.refresh_token,
+    expires_at: Date.now() + (body.expires_in || 3600) * 1000,
+    user: body.user
+  });
+  return SESSION;
+}
+
+async function refreshSession(){
+  if(!SESSION || !SESSION.refresh_token) return null;
+  let r;
+  try{
+    r = await fetch(AUTH_URL + "/token?grant_type=refresh_token", {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: SESSION.refresh_token })
+    });
+  }catch(e){ return SESSION; }          // offline: keep what we have, don't sign out
+  if(!r.ok){ saveSession(null); return null; }
+  const body = await r.json();
+  saveSession({
+    access_token: body.access_token,
+    refresh_token: body.refresh_token,
+    expires_at: Date.now() + (body.expires_in || 3600) * 1000,
+    user: body.user || SESSION.user
+  });
+  return SESSION;
+}
+
+// Refresh a minute early rather than discovering expiry mid-save.
+async function ensureFreshSession(){
+  if(!SESSION) return null;
+  if(Date.now() > (SESSION.expires_at - 60000)) return await refreshSession();
+  return SESSION;
+}
+
+async function signOut(){
+  if(SESSION && SESSION.access_token){
+    try{ await fetch(AUTH_URL + "/logout", { method:"POST",
+      headers:{ apikey:SUPABASE_KEY, Authorization:"Bearer "+SESSION.access_token } }); }
+    catch(e){ /* the local sign-out is the part that matters */ }
+  }
+  saveSession(null);
+  location.reload();
+}
+
+/* ---------- who am I ---------- */
+
+// Global role from user_profiles. Null means no profile row, which will mean no
+// access at all once RLS is on — deliberately fails closed.
+async function loadRole(){
+  S.role = null; S.fullName = null;
+  if(!SESSION || !SESSION.user) return null;
+  try{
+    const r = await api("user_profiles?select=role,full_name&user_id=eq." + SESSION.user.id);
+    if(!r.ok) return null;
+    const rows = await r.json();
+    if(rows.length){ S.role = rows[0].role; S.fullName = rows[0].full_name || null; }
+  }catch(e){ /* offline — renderWhoAmI will show "no role" */ }
+  return S.role;
+}
+
+// The caller's membership row for the current project. This is what replaces
+// the "Evaluating as" picker: you are who you signed in as.
+function myEvaluatorFor(){
+  if(!SESSION || !SESSION.user) return null;
+  return S.evaluators.find(e => e.user_id === SESSION.user.id) || null;
+}
+
+// Called before any write that needs attribution.
+//
+// Role is global; MEMBERSHIP is per-project. An admin or superadmin administers
+// the whole install, so they can legitimately land in a project nobody has
+// added them to — rather than dead-end them, we create the membership row the
+// first time they actually need one. Below admin, no membership row means not
+// a member of this project, and that is an answer, not an accident.
+async function ensureMyEvaluator(){
+  const mine = myEvaluatorFor();
+  if(mine) return mine;
+  if(!atLeast("admin")) return null;
+  const name = S.fullName || ((SESSION.user||{}).email || "").split("@")[0];
+  const res = await saveOp(() => api("evaluators", {
+    method:"POST", headers:{ ...H, "Prefer":"return=representation" },
+    body: JSON.stringify({ project_id:S.projectId, name, user_id:SESSION.user.id })
+  }));
+  if(!res) return null;
+  const row = (await res.json())[0];
+  S.myEvaluatorId = row.id;      // ratingIsMine() shades by this, so it must be set here too
+  S.evaluators.push(row);
+  S.evaluator = row.name;
+  return row;
+}
+
+// Who the app writes as. Derived from the session — never picked from a list.
+function setIdentityFromSession(){
+  const mine = myEvaluatorFor();
+  S.evaluator = mine ? mine.name
+              : (S.fullName || ((SESSION && SESSION.user && SESSION.user.email) || "").split("@")[0] || "unattributed");
+  S.myEvaluatorId = mine ? mine.id : null;
+}
+
+// THE ONE PLACE that decides "is this rating mine". Four call sites used to
+// each carry their own copy of the rule, and all four compared the evaluator
+// NAME TEXT. That is the defect that split one human into "Chip" and "Seebo",
+// hid 29 ratings, and then produced contradictory duplicate rows once the two
+// names were merged. See D9 and migration 15.
+//
+// evaluator_id is a foreign key to evaluators.id. The name column stays on the
+// row as a readable snapshot of who rated it at the time, and is never matched
+// on again.
+//
+// Fails CLOSED. If S.myEvaluatorId is null — you are signed in but not on this
+// project's evaluator list — this returns nothing rather than matching every
+// orphaned row whose evaluator_id is also null. An unrated cell is the honest
+// answer there; silently adopting a deleted person's ratings is not.
+/* ⚠ RENAMED FROM myRating() AND IT NO LONGER LOOKS AT WHO RATED IT.
+
+   ONE RATING PER NODE × SYSTEM, SHARED BY THE WHOLE PROJECT — Seebo's
+   decision 2026-09-01, enforced in the database by migration `21`
+   (UNIQUE (node_id, system_id), and any member may update any row).
+
+   The old version filtered on `evaluator_id === S.myEvaluatorId`. It loaded
+   every rating in the project and then discarded everyone else's, so two
+   people rating the same taxonomy could not see each other's work at all —
+   each believed the other's nodes were unrated. Found by signing in as
+   `[address removed]` for the first time.
+
+   That filter was deliberate once: S25 (2026-08-17) split roll-up per
+   evaluator so one person's None could not colour another person's view.
+   The per-evaluator LOOKUP came along with it and outlived the reason.
+
+   ⚠ THE NAME WAS THE TRAP. `myRating` kept reading as "the rating" at every
+   call site while meaning "the rating I personally left". Renamed so the
+   next reader cannot make that mistake. */
+/* ⚠ A RATING IS NOW node × system × CHANNEL (B18, migration 22).
+   channelId is REQUIRED. It is not defaulted and not optional: `Reschedule
+   × Livery Coach × Office·Desktop` and `× Customer·Web` are different
+   judgments about different things, and a lookup that quietly ignored the
+   channel would merge them — the same class of mistake as the per-evaluator
+   filter this function was rescued from a day earlier. */
+function ratingFor(nodeId, systemId, channelId){
+  if(!channelId) return null;
+  return S.evals.find(e => e.node_id === nodeId
+                        && e.system_id === systemId
+                        && e.channel_id === channelId) || null;
+}
+
+// Channels a system actually offers, in display order. A system with none
+// cannot be rated — migration 22 seeds one per system so that cannot happen
+// by accident, but a channel deleted in Settings can bring it back.
+function channelsFor(systemId){
+  return S.channels.filter(c => c.system_id === systemId)
+                   .sort((a,b) => (a.sort_order||0)-(b.sort_order||0)
+                                  || (a.short_name||"").localeCompare(b.short_name||""));
+}
+function channelById(id){ return S.channels.find(c => c.id === id) || null; }
+function channelLabel(c){ return c ? (c.audience + " · " + c.surface) : "—"; }
+
+// Readable ink for a filled box. Ported from the mockup: a dark scale colour
+// like #000040 needs white text or the code vanishes.
+function ink(hex){
+  const m=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex||"");
+  if(!m) return "#1a1a1a";
+  const [r,g,b]=[1,2,3].map(i=>parseInt(m[i],16));
+  return (r*299 + g*587 + b*114)/1000 > 140 ? "#1a1a1a" : "#ffffff";
+}
+
+// Whose judgment is on screen. For SHADING ONLY — never for deciding whether
+// a rating exists, which is the mistake this whole change is undoing.
+function ratingIsMine(ex){
+  return !!(ex && S.myEvaluatorId && ex.evaluator_id === S.myEvaluatorId);
+}
+
+// The display name of whoever set it, for the tooltip on someone else's rating.
+function raterName(ex){
+  if(!ex) return null;
+  const e = S.evaluators.find(x => x.id === ex.evaluator_id);
+  return (e && e.name) || ex.evaluator || "someone else";
+}
+
+const ROLE_RANK = { superadmin:4, admin:3, builder:2, evaluator:1 };
+function atLeast(role){ return (ROLE_RANK[S.role] || 0) >= (ROLE_RANK[role] || 0); }
+
+// The three header controls are static markup, so they get hidden once rather
+// than on every render. Notes is builder+ because the list carries other
+// people's notes verbatim, and those are often candid about a system.
+function applyRoleToChrome(){
+  $("settingsbtn").style.display = atLeast("admin")   ? "" : "none";
+  $("newprojbtn").style.display  = atLeast("admin")   ? "" : "none";
+  $("notesbtn").style.display    = atLeast("builder") ? "" : "none";
+}
+
+/* ---------- the sign-in screen ---------- */
+
+// dismissible is true while RLS is off, so the app stays usable and testable.
+// Step 4 calls this with dismissible:false, and then it really is a gate.
+function showLogin(message, opts){
+  const dismissible = !opts || opts.dismissible !== false;
+  const ov  = el("div","overlay authoverlay");
+  const box = el("div","modal authbox");
+  const head = el("div","mhead"); head.appendChild(el("h3", null, "Sign in to CCT"));
+  if(dismissible){
+    const x = el("button","x","×");
+    x.addEventListener("click", () => ov.remove());
+    head.appendChild(x);
+  }
+  box.appendChild(head);
+  const body = el("div","mbody");
+
+  const em = Object.assign(el("input"), { type:"email",    placeholder:"you@example.com", autocomplete:"username" });
+  const pw = Object.assign(el("input"), { type:"password", placeholder:"Password",        autocomplete:"current-password" });
+  const msg = el("div","smsg");
+  const go  = el("button","btn","Sign in");
+
+  body.appendChild(el("label","authlbl","Email"));    body.appendChild(em);
+  body.appendChild(el("label","authlbl","Password")); body.appendChild(pw);
+  body.appendChild(go); body.appendChild(msg);
+  body.appendChild(el("div","kv",
+    "Accounts are created by the administrator — there is no self-signup. "+
+    "Forgotten your password? Ask Seebo to set a new one."));
+  if(message){ msg.className="smsg bad"; msg.textContent=message; }
+
+  box.appendChild(body); ov.appendChild(box); document.body.appendChild(ov);
+  if(dismissible) ov.addEventListener("click", e => { if(e.target===ov) ov.remove(); });
+  em.focus();
+
+  const attempt = async () => {
+    const e = em.value.trim(), p = pw.value;
+    if(!e || !p){ msg.className="smsg bad"; msg.textContent="Email and password, please."; return; }
+    go.disabled = true; go.textContent = "Signing in…"; msg.className="smsg"; msg.textContent="";
+    try{
+      await signIn(e, p);
+      location.reload();          // simplest correct thing: start clean, with a token
+    }catch(err){
+      go.disabled = false; go.textContent = "Sign in";
+      msg.className = "smsg bad";
+      msg.textContent = String(err.message || err);
+      pw.value = ""; pw.focus();
+    }
+  };
+  go.addEventListener("click", attempt);
+  [em,pw].forEach(i => i.addEventListener("keydown", e => { if(e.key==="Enter") attempt(); }));
+}
+
+// Header identity chip
+function renderWhoAmI(){
+  const slot = $("whoami"); if(!slot) return;
+  slot.innerHTML = "";
+  if(!SESSION || !SESSION.user){
+    const b = el("button","btn ghost sm","Sign in");
+    b.addEventListener("click", () => showLogin());
+    slot.appendChild(b);
+    return;
+  }
+  const name = S.fullName || (SESSION.user.email || "").split("@")[0];
+  const chip = el("span","whochip");
+  chip.appendChild(el("span","whoname", name));
+  chip.appendChild(el("span","whorole", S.role || "no role"));
+  if(!S.role) chip.classList.add("norole");
+  chip.title = (SESSION.user.email || "") +
+    (S.role ? " · " + S.role : " · no role assigned — an administrator must grant one");
+  slot.appendChild(chip);
+  const out = el("button","btn ghost sm","Sign out");
+  out.addEventListener("click", signOut);
+  slot.appendChild(out);
+}
+
+// --- connection pill: driven by real traffic, never by a guess ---
+// Green means a request genuinely succeeded recently. A network-level failure
+// (or the browser reporting itself offline) turns it red; an HTTP error does
+// NOT — that's the database answering, so the connection is fine.
+function setConn(state,label){
+  const p=$("connpill");
+  p.className="pill conn "+state;
+  $("conntext").textContent = label || (state==="ok"?"Connected" : state==="bad"?"Offline" : "Connecting…");
+}
+function isNetworkError(err){ return err instanceof TypeError || !navigator.onLine; }
+async function pingDb(){
+  setConn("wait");
+  try{ const r=await api("projects?select=id&limit=1"); setConn(r.ok?"ok":"bad", r.ok?null:"DB error"); }
+  catch{ setConn("bad"); }
+}
+window.addEventListener("offline",()=>setConn("bad"));
+window.addEventListener("online",pingDb);
+
+// --- truthful save status: every write goes through saveOp() ---
+// Writes usually land in <200ms, so blue would flicker past unseen. We hold
+// "Saving…" for a minimum beat, then pulse the green pill so a save is always
+// perceptible. Failures are never delayed — bad news shows immediately.
+const SAVE_MIN_MS=500, SAVE_PULSE_MS=1500;
+let lastFailedOp=null, saveSeq=0, pulseTimer=null;
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+function setSave(state){
+  const box=$("savestate"), txt=$("savetext");
+  box.className="savestate "+state;
+  txt.textContent = state==="saving"?"Saving…" : state==="failed"?"Not saved" : "Saved";
+}
+function pulseSaved(){
+  const box=$("savestate");
+  clearTimeout(pulseTimer); box.classList.remove("justsaved");
+  void box.offsetWidth;                       // restart the animation
+  box.classList.add("justsaved");
+  pulseTimer=setTimeout(()=>box.classList.remove("justsaved"), SAVE_PULSE_MS);
+}
+let lastSaveError=null;
+
+/* =========================================================================
+   ⚠ A WRITE REFUSED BY ROW-LEVEL SECURITY IS NOT AN HTTP ERROR.
+
+   PostgREST answers a refused UPDATE or DELETE with **200 and an EMPTY ARRAY**:
+   zero rows matched the policy. At the HTTP layer that is indistinguishable
+   from "I did exactly what you asked" — so `res.ok` is true, the pill goes
+   green, and the write never happened.
+
+   That is the defect opened in Session 8 and it is silent at BOTH ends: the
+   evaluator sees "Saved", the administrator later sees missing data, and
+   nothing anywhere connects the two. Worse for a rating — `Object.assign(ex,
+   undefined)` is a no-op that does not throw, so the old value stays on screen
+   looking correct until a reload wipes it.
+
+   The tell is already on the wire. Every write that sends
+   `Prefer: return=representation` gets its row back, so an empty array means
+   refused. This is the ONE place that has to look, instead of ~20 call sites
+   each having to remember.
+
+   ⚠ SCOPE, deliberately narrow. Only a JSON array of length 0 counts. A 204,
+   an empty body, or any non-array payload is left alone — a DELETE sent without
+   `Prefer` legitimately returns no content, and treating that as a refusal
+   would break every delete in the app.
+
+   ⚠ res.clone() is REQUIRED. Callers read the body themselves after saveOp
+   returns; consuming the original here would break every one of them.
+   ========================================================================= */
+const REFUSED_MSG =
+  "The database refused this write (row-level security). NOTHING WAS SAVED — "+
+  "reload the page before trusting what is on screen.";
+
+async function assertNotRefused(res){
+  if(!res || typeof res.clone !== "function") return;   // not a Response
+  if(res.status===204 || res.status===205) return;      // no content, by design
+  let body;
+  try{ body = await res.clone().json(); }
+  catch(_){ return; }                                   // not JSON → nothing to judge
+  if(Array.isArray(body) && body.length===0) throw new Error(REFUSED_MSG);
+}
+
+async function saveOp(fn){
+  const seq=++saveSeq, t0=Date.now();
+  clearTimeout(pulseTimer); $("savestate").classList.remove("justsaved");
+  setSave("saving");
+  try{
+    const res=await fn();
+    if(res && res.ok===false){ throw new Error("HTTP "+res.status+" "+(await res.text())); }
+    await assertNotRefused(res);        // 200 + [] is a refusal, not a success
+    const left=SAVE_MIN_MS-(Date.now()-t0); if(left>0) await wait(left);
+    if(seq===saveSeq){ setSave("saved"); pulseSaved(); }   // a later save owns the pill
+    setConn("ok");
+    lastFailedOp=null;
+    return res;
+  }catch(err){
+    if(seq===saveSeq) setSave("failed");
+    if(isNetworkError(err)) setConn("bad");
+    lastFailedOp=fn;
+    lastSaveError=String(err && err.message || err);   // so callers can show the REAL reason
+    console.error("save failed:",err);
+    return null;
+  }
+}
+
+const S={ mode:"build", nodes:[], systems:[], scaleValues:[], evals:[], projects:[], evaluators:[], aliases:[], notes:[], shots:[], cameFrom:null,
+  projectId:null, currentId:null, currentSystem:null, evaluator:"Seebo", coEvaluator:null, collapsed:new Set(),
+  evalDomain:"all", chartMulti:false, meaningChanges:{},
+  channels:[], currentChannel:null,       // B18 — a rating is node x system x CHANNEL
+  aliasMode:false,                        // 3b — show the selected system's own words in the tree
+  role:null, fullName:null,              // set by loadRole(); null = no access once RLS is on
+  myEvaluatorId:null };                  // set by setIdentityFromSession(); used for SHADING only, never for lookup
+
+function svById(id){ return S.scaleValues.find(v=>v.id===id); }
+function svByLabel(l){ return S.scaleValues.find(v=>v.label===l); }
+// Siblings are ordered MANUALLY (migration 18), with name as the tie-break.
+// Alphabetical was actively wrong for a sequence — Create, Find, Modify, Set
+// Status reads as Communications, Create, Find, Modify, Set Status — and is
+// worse again for the data nodes of migration 19, where "name, address, phone"
+// is meaningful and "address, name, phone" is noise.
+// The name tie-break matters: two rows sharing a number must not flap between
+// page loads. That is the unordered-.find() defect of migration 15, remembered.
+// Defensive on name: it is NOT NULL in the database, so a nameless row cannot
+// come from the server — but one bad object here would throw inside Array.sort
+// and take the WHOLE tree render down. This app has already had a silent
+// tree-wide failure once (D9); a two-character guard is cheaper than the hunt.
+function bySibling(a,b){ return (a.sort_order||0)-(b.sort_order||0) || (a.name||"").localeCompare(b.name||""); }
+function childrenOf(id){ return S.nodes.filter(n=>n.parent_id===id).sort(bySibling); }
+function roots(){ return S.nodes.filter(n=>!n.parent_id || !S.nodes.some(p=>p.id===n.parent_id)).sort(bySibling); }
+const KIND_CAP = "capability", KIND_DATA = "data";
+function isData(n){ return n && n.kind === KIND_DATA; }
+// The kind a new child of `parent` MUST be, or null if the group is empty and
+// the caller may choose. Mirrors the nodes_kind_guard trigger in migration 19;
+// the trigger is the authority, this only avoids offering an invalid option.
+function forcedChildKind(parentId){
+  const kids = parentId ? childrenOf(parentId) : roots();
+  return kids.length ? (kids[0].kind || KIND_CAP) : null;
+}
+// New nodes land at the end of their sibling group, never at the top.
+function siblingsOf(parentId){ return parentId ? childrenOf(parentId) : roots(); }
+function nextSortOrder(parentId){
+  const sibs=siblingsOf(parentId);
+  return sibs.length ? Math.max(...sibs.map(x=>x.sort_order||0))+1 : 1;
+}
+// ⚠ CURRENTLY UNUSED. Its only caller was the grp/leaf pill, dropped 2026-08-30.
+// Kept because the collapse-data-by-default work wants exactly this, and it is
+// one correct line. Delete it if that work does not happen.
+function isLeaf(n){ return !S.nodes.some(c=>c.parent_id===n.id); }
+function nodeById(id){ return S.nodes.find(n=>n.id===id); }
+// --- move / re-parent helpers ---
+function descendantIds(id){            // self + everything under it (cycle guard)
+  const out=new Set([id]); const stack=[id];
+  while(stack.length){ const cur=stack.pop();
+    S.nodes.filter(n=>n.parent_id===cur).forEach(c=>{ if(!out.has(c.id)){ out.add(c.id); stack.push(c.id); } }); }
+  return out;
+}
+function ancestorsOf(id){ const out=[]; let c=nodeById(id); while(c && c.parent_id){ c=nodeById(c.parent_id); if(c) out.push(c); } return out; }
+function pathOf(n){ const p=[]; let c=n; while(c){ p.unshift(c.name); c=nodeById(c.parent_id); } return p.join("  ›  "); }
+
+/* ---------- NAVIGATION: one door into a node ---------- */
+// Every route to a node — tree click, navigator pill, search hit — comes
+// through here, so selection, expansion, history and scroll never disagree.
+function goTo(id,opts={}){
+  const n=nodeById(id); if(!n) return;
+  S.currentId=id;
+  ancestorsOf(id).forEach(a=>S.collapsed.delete(a.id));   // reveal it if buried
+  if(S.mode!=="build") setMode("build"); else { renderTree(); renderRight(); }
+  if(opts.scroll!==false) scrollTreeTo(id);
+}
+function scrollTreeTo(id){
+  const row=document.querySelector('.tn[data-id="'+id+'"]');
+  if(row) row.scrollIntoView({block:"nearest"});
+}
+
+// A node is coloured by ITS OWN rating for the current system, and by nothing
+// else. No roll-up. Every node — parent, child, ancestor — is independent, so a
+// parent may read Full while a child reads Partial. That looks impossible and
+// isn't: in a working session a capability gets provisionally parented, or the
+// room agrees to call a parent Full for a reason not yet written down. Forcing
+// parent/child consistency to satisfy a scoring rule would make the tool argue
+// with the room. Decision D9.
+//
+// The cost, stated plainly: an unrated parent shows grey even when all of its
+// children are rated. That is the honest reading — it is unrated — and it beats
+// borrowing confidence from below.
+//
+// This replaced a read of the node_rollup view. That read had never worked: it
+// filtered on r.evaluator, and the view has no evaluator column, so the
+// comparison was undefined===name and false on every row. The swatch had been
+// unconditionally grey since the filter was added. See D9.
+/* ⚠ THE TREE AND CHART SHOW ONE CHANNEL AT A TIME.
+   With B18 a node has up to one rating per system PER CHANNEL, and a single
+   swatch cannot honestly show several. So the tree paints the current system
+   × the current channel, chosen in the header, and the matrix is where you
+   see them all at once.
+
+   ⚠ Falls back to the system's FIRST channel rather than to "any rating".
+   "Any" would let a Customer·Web rating colour a swatch the reader is
+   reading as Office·Desktop — quietly answering a different question from
+   the one asked, which is exactly what D9 retired roll-up for. */
+function currentChannelFor(systemId){
+  const list = channelsFor(systemId);
+  if(!list.length) return null;
+  const picked = list.find(c => c.id === S.currentChannel);
+  return picked || list[0];
+}
+function colorForSystem(nodeId, sys, channelId){
+  if(!sys) return null;
+  const ch = channelId || (currentChannelFor(sys) || {}).id;
+  const ex = ratingFor(nodeId, sys, ch);
+  if(!ex) return null;
+  const sv=svById(ex.scale_value_id);
+  if(!sv) return null;
+  return { label:sv.label, color:sv.color, derived:false };
+}
+function colorFor(nodeId){ return colorForSystem(nodeId, S.currentSystem); }
+
+/* ---------- LEFT TREE ---------- */
+// The sidebar box cannot offer a choice, so it states the outcome instead.
+function syncQuickAddHint(){
+  const q=$("quickadd"); if(!q) return;
+  const cur=nodeById(S.currentId);
+  if(!cur){ q.placeholder="Add child to selected… (Enter)"; q.disabled=false; return; }
+  if(isData(cur)){
+    q.placeholder="“"+cur.name+"” is a data element — it cannot have children";
+    q.disabled=true; return;
+  }
+  q.disabled=false;
+  q.placeholder = (forcedChildKind(cur.id)===KIND_DATA)
+    ? "Add DATA ELEMENT to “"+cur.name+"”… (Enter)"
+    : "Add child to selected… (Enter)";
+}
+
+function renderTree(){
+  const box=$("treebox"); box.innerHTML="";
+  syncQuickAddHint();
+  const list=roots();
+  if(!list.length){ box.appendChild(el("div","empty","No nodes yet. Add one below.")); return; }
+  const ul=el("ul","tree"); list.forEach(n=>ul.appendChild(treeNode(n))); box.appendChild(ul);
+}
+/* Alias mode owns the system picker's visibility. Off, there is nothing to
+   choose; on, the picker is the whole point — "aliases" means nothing without
+   "whose". Kept in one function so the button, the picker and the tree can
+   never disagree about which state they are in. */
+function syncAliasChrome(){
+  const btn=$("aliasbtn"), sp=$("syspick");
+  if(!btn||!sp) return;
+  btn.classList.toggle("on", S.aliasMode);
+  const show = S.aliasMode && S.mode!=="evaluate" && S.systems.length>0;
+  sp.style.display = show ? "" : "none";
+  if(show){
+    if(S.currentSystem) sp.value=S.currentSystem;
+    const sys=S.systems.find(x=>x.id===S.currentSystem);
+    const n=S.aliases.filter(a=>a.system_id===S.currentSystem).length;
+    btn.title = sys
+      ? "Showing "+sys.name+"'s own words — "+n+" node"+(n===1?"":"s")+" renamed. Click to turn off."
+      : "Showing system aliases. Click to turn off.";
+  } else {
+    btn.title = "Show each system's own word for these nodes";
+  }
+}
+
+function treeNode(n){
+  const li=el("li");
+  const kids=childrenOf(n.id);
+  const row=el("div","tn"+(n.id===S.currentId?" sel":""));
+  row.dataset.id=n.id;
+  const hasKids=kids.length>0;
+  const caret=el("span","caret", hasKids?(S.collapsed.has(n.id)?"▶":"▼"):"");
+  if(hasKids){ caret.addEventListener("click",e=>{ e.stopPropagation(); if(S.collapsed.has(n.id))S.collapsed.delete(n.id); else S.collapsed.add(n.id); renderTree(); }); }
+  row.appendChild(caret);
+  // color swatch in evaluate/chart modes
+  if(S.mode!=="build"){ const c=colorFor(n.id); const sw=el("span","tw"); sw.style.background=c?c.color:"var(--none)"; row.appendChild(sw); }
+  if(isData(n)) row.classList.add("datarow");
+  // 3b — in alias mode, show the selected system's term where one exists.
+  // Nodes with no alias keep their real name and get NO highlight, so the
+  // gaps are visible: an unhighlighted row is one this system has no word for.
+  const alias = S.aliasMode ? aliasTermFor(n.id, S.currentSystem) : null;
+  const nm = el("span","nm"+(alias?" aliased":""), alias || n.name);
+  if(alias){
+    const sys = S.systems.find(x=>x.id===S.currentSystem);
+    nm.title = (sys?sys.name:"This system")+" calls this “"+alias+"”.\nCanonical name: "+n.name;
+  }
+  row.appendChild(nm);
+  // No grp/leaf/data pill. The caret already says whether a node has children,
+  // and a data element is now shown by the cream row behind it. "on hold" stays
+  // — it is a state nothing else reports.
+  if(S.mode==="build" && !n.evaluation_ready) row.appendChild(el("span","mini hold","on hold"));
+  row.addEventListener("click",()=>goTo(n.id,{scroll:false}));
+  li.appendChild(row);
+  if(hasKids && !S.collapsed.has(n.id)){ const ul=el("ul"); kids.forEach(k=>ul.appendChild(treeNode(k))); li.appendChild(ul); }
+  return li;
+}
+
+/* ---------- RIGHT PANEL ---------- */
+function renderRight(){
+  const r=$("right"); r.innerHTML="";
+  if(S.mode==="chart"){ return renderChart(r); }
+  if(S.mode==="evaluate"){ return renderMatrix(r); }
+  const n=nodeById(S.currentId);
+  if(!n){ r.appendChild(el("div","empty", atLeast("builder")
+      ? "Select a node from the tree, or add one to begin."
+      : "Select a node from the tree to read it or attach evidence.")); return; }
+
+  renderNavStrip(r,n);
+  renderBuild(r,n);
+}
+
+/* ---------- POSITION NAVIGATOR ----------
+   Ancestors ▸ current, with the add buttons placed where the new node will
+   land: to the RIGHT for a sibling (same level), BELOW for a child (one level
+   down). Position carries the meaning, so the buttons need no explanation.
+   No "add parent" — inserting a level above is a re-parent, not an add.      */
+function renderNavStrip(r,n){
+  const strip=el("div","navstrip");
+
+  const chain=[]; let c=nodeById(n.parent_id); while(c){ chain.unshift(c); c=nodeById(c.parent_id); }
+  chain.forEach(a=>{
+    const pill=el("button","npill anc",a.name);
+    pill.title="Go to “"+a.name+"”";
+    pill.addEventListener("click",()=>goTo(a.id));
+    strip.appendChild(pill);
+    strip.appendChild(el("span","nsep","›"));
+  });
+
+  // Current node and its children share one column, so the children row starts
+  // exactly at the current node's left edge — the indent IS the level change.
+  // The add buttons live inside the top row, so a wide children row can't push
+  // them away from the node they act on.
+  const col=el("div","curcol");
+
+  const top=el("div","currow");
+  top.appendChild(el("div","npill cur",n.name));
+  if(atLeast("builder")){
+    const sibs=siblingsOf(n.parent_id||null);
+    const idx=sibs.findIndex(x=>x.id===n.id);
+    if(sibs.length>1){
+      const ord=el("div","ordctl");
+      [["▲",-1,"Move up among its siblings"],["▼",1,"Move down among its siblings"]].forEach(([glyph,dir,tip])=>{
+        const b=el("button","ordbtn",glyph);
+        b.title=tip;
+        b.disabled = dir<0 ? idx<=0 : idx>=sibs.length-1;
+        // Not awaited and not disabled: the move is local and instant, and the
+        // save follows once the clicking stops.
+        b.addEventListener("click",()=>{
+          if(moveSibling(n,dir)) flashNav("Moved “"+n.name+"” "+(dir<0?"up":"down")+".");
+        });
+        ord.appendChild(b);
+      });
+      top.appendChild(ord);
+    }
+    const sibSlot=el("div","addslot"); sibSlot.appendChild(addControl(n,"sibling",sibSlot)); top.appendChild(sibSlot);
+    // A data node is terminal by construction (migration 19), so it simply has
+    // no "add child" control. Better than offering one that always errors.
+    if(!isData(n)){
+      const forced = forcedChildKind(n.id);
+      // BOTH are always shown. The one the rule forbids is disabled and says
+      // why. Hiding it, or silently coercing to the allowed kind, is how a
+      // user ends up with a data node they did not ask for.
+      [KIND_CAP, KIND_DATA].forEach(k=>{
+        const cs=el("div","addslot");
+        const ctl=addControl(n,"child",cs,k);
+        if(forced && forced!==k){
+          ctl.disabled=true;
+          ctl.classList.add("addoff");
+          ctl.title = (forced===KIND_DATA)
+            ? "“"+n.name+"” already holds data elements, and children must all be one kind. "
+              +"To add a capability here, move the data elements under a child capability first."
+            : "“"+n.name+"” already has capability children, and children must all be one kind. "
+              +"To add data elements here, put them under a child capability instead.";
+        }
+        cs.appendChild(ctl); top.appendChild(cs);
+      });
+    }
+  }
+  col.appendChild(top);
+
+  strip.appendChild(col);
+  if(childrenOf(n.id).length) refreshKidsRow(n,col);   // same builder the live refresh uses
+
+  r.appendChild(strip);
+  const note=el("div","navnote"); note.id="navnote"; r.appendChild(note);
+}
+
+// The button and its inline entry box swap in and out of the same slot.
+// `rel` is "child" or "sibling" — the RELATIONSHIP being created. Renamed from
+// `kind` on 2026-08-30, because migration 19 gives nodes a `kind` of their own
+// (capability | data) and two senses of one word inside one function is how a
+// wrong node gets created without anyone noticing.
+function addControl(n,rel,slot,kind){
+  const isD = kind===KIND_DATA;
+  // Tagged so syncChildAddButtons() can find and re-evaluate them without
+  // redrawing the panel and destroying an open input.
+  const btn=el("button","addbtn"+(isD?" dataadd":""),
+               rel==="child" ? (isD?"+ data type":"+ child") : "+ sibling");
+  btn.dataset.rel = rel;
+  btn.dataset.kind = kind || "";
+  btn.dataset.node = n.id;
+  btn.title = rel==="child"
+    ? (isD ? "Add a data element under “"+n.name+"” — a field or value, with no children of its own"
+           : "Add a node one level under “"+n.name+"”")
+    : "Add a node beside “"+n.name+"”, under the same parent";
+  btn.addEventListener("click",()=>{
+    slot.innerHTML="";
+    const inp=el("input","addinp");
+    inp.placeholder = rel==="child"
+      ? (isD ? "New data element under "+n.name+"…" : "New child of "+n.name+"…")
+      : "New sibling…";
+    slot.appendChild(inp); inp.focus();
+    inp.addEventListener("keydown",async e=>{
+      if(e.key==="Escape"){ slot.innerHTML=""; slot.appendChild(addControl(n,rel,slot,kind)); return; }
+      if(e.key!=="Enter") return;
+      const name=inp.value.trim(); if(!name) return;
+      inp.value=""; inp.disabled=true;
+      const ok=await addNodeRelative(n,rel,name,kind);
+      inp.disabled=false; inp.focus();                 // stay put: keep entering at this level
+      if(ok) flashNav("Added “"+name+"”"+(rel==="child"?" under ":" beside ")+n.name+".");
+    });
+    inp.addEventListener("paste",e=>{
+      // sibling pastes go under this node's parent; child pastes go under it
+      const target = rel==="child" ? n : (n.parent_id ? nodeById(n.parent_id) : null);
+      handleMultiPaste(e, target, created=>{
+        inp.value="";
+        renderTree();
+        if(rel==="child"){ refreshKidsRow(n); syncChildAddButtons(n.id); }
+        inp.focus();
+        flashNav("Added "+created.length+(rel==="child"?" children under ":" siblings beside ")+n.name+".");
+      }, rel==="child" ? kind : (n.kind||KIND_CAP));
+    });
+    inp.addEventListener("blur",()=>{ if(!inp.value.trim()){ slot.innerHTML=""; slot.appendChild(addControl(n,rel,slot,kind)); } });
+  });
+  return btn;
+}
+/* ---------- REORDER: optimistic, with a debounced flush ----------
+ * The first version awaited two saveOp() calls per click, and every click cost
+ * a full second of deliberate waiting with the button disabled. The network was
+ * never the problem: SAVE_MIN_MS is a 500 ms MINIMUM DISPLAY TIME so the
+ * "saving" pill is actually visible, and a swap paid it twice.
+ *
+ * So there are three fixes here and debouncing is only one of them:
+ *   1. The move happens LOCALLY first and re-renders immediately. Clicking is
+ *      instant regardless of what the network is doing.
+ *   2. A burst of clicks coalesces into ONE flush after the user stops.
+ *   3. That flush is a SINGLE saveOp wrapping all the PATCHes in parallel, so
+ *      the 500 ms floor is paid once per burst instead of twice per click.
+ *
+ * 600 ms: there is no universal standard. ~100 ms reads as instantaneous,
+ * 300 ms is the classic type-ahead debounce, and ~1 s is Nielsen's threshold
+ * for keeping a user's flow of thought unbroken. For coalescing discrete
+ * clicks, 500-700 ms is the usual autosave-on-idle range. One constant, one
+ * edit to change it.
+ */
+const REORDER_IDLE_MS = 600;
+let orderTimer = null, orderFlushing = false;
+const orderDirty = new Set();
+function reorderPending(){ return !!orderTimer || orderFlushing || orderDirty.size > 0; }
+
+// Renumbers the whole sibling group 1..n rather than swapping a pair. Swapping
+// is fine for one move; across a debounced burst it can cancel itself out and
+// leave the screen and the database disagreeing.
+function moveSibling(n, dir){
+  const sibs = siblingsOf(n.parent_id||null);
+  const i = sibs.findIndex(x=>x.id===n.id);
+  const j = i + dir;
+  if(i<0 || j<0 || j>=sibs.length) return false;       // already at the end
+  sibs.splice(j, 0, sibs.splice(i,1)[0]);
+  sibs.forEach((x,k)=>{ if(x.sort_order !== k+1){ x.sort_order = k+1; orderDirty.add(x.id); } });
+  renderTree(); renderRight();
+  clearTimeout(orderTimer);
+  orderTimer = setTimeout(flushOrder, REORDER_IDLE_MS);
+  return true;
+}
+
+async function flushOrder(){
+  clearTimeout(orderTimer); orderTimer = null;
+  if(orderFlushing || !orderDirty.size) return true;
+  const ids = [...orderDirty]; orderDirty.clear();
+  orderFlushing = true;
+  let ok = false;
+  try{
+    const rows = ids.map(nodeById).filter(Boolean);
+    const res = await saveOp(async ()=>{
+      const out = await Promise.all(rows.map(x =>
+        api("nodes?id=eq."+x.id, {
+          method:"PATCH",
+          headers:{...H, "Prefer":"return=representation"},
+          body: JSON.stringify({ sort_order: x.sort_order })
+        })));
+      const bad = out.find(r => r && r.ok === false);
+      if(bad) return bad;
+      // ⚠ A refused UPDATE under RLS is NOT an error — it returns 200 with an
+      // EMPTY array, so checking res.ok would report "Saved" on a write the
+      // database declined. Asking for the representation back is what makes
+      // the refusal visible. (Open defect from Session 8, closed here for this
+      // operation; the same treatment is owed to every other PATCH.)
+      const bodies = await Promise.all(out.map(r => r.clone().json().catch(()=>null)));
+      const refused = bodies.filter(b => Array.isArray(b) && b.length === 0).length;
+      if(refused) throw new Error(refused+" of "+out.length+
+        " reorder writes were refused by the database (row-level security). "+
+        "The order on screen has NOT been saved.");
+      return out[0];
+    });
+    ok = !!res;
+    if(!ok) ids.forEach(id => orderDirty.add(id));     // failed: still dirty, retry later
+  } finally {
+    orderFlushing = false;
+  }
+  if(orderDirty.size && !orderTimer) orderTimer = setTimeout(flushOrder, REORDER_IDLE_MS);
+  return ok;
+}
+
+// Anything that navigates away from the current arrangement flushes first.
+window.addEventListener("beforeunload", e=>{
+  if(reorderPending()){ e.preventDefault(); e.returnValue=""; }
+});
+
+// Re-evaluate the child add buttons in place. Called after anything that
+// changes a node's children, because the panel is NOT redrawn while an add
+// input is open — and a button that was right when drawn is a button that
+// silently goes wrong.
+function syncChildAddButtons(nodeId){
+  const n = nodeById(nodeId); if(!n) return;
+  const forced = forcedChildKind(n.id);
+  document.querySelectorAll('.currow .addbtn[data-rel="child"]').forEach(btn=>{
+    if(btn.dataset.node !== n.id) return;
+    const k = btn.dataset.kind || KIND_CAP;
+    const off = !!(forced && forced !== k);
+    btn.disabled = off;
+    btn.classList.toggle("addoff", off);
+    if(off){
+      btn.title = (forced===KIND_DATA)
+        ? "“"+n.name+"” already holds data elements, and children must all be one kind. "
+          +"To add a capability here, move the data elements under a child capability first."
+        : "“"+n.name+"” already has capability children, and children must all be one kind. "
+          +"To add data elements here, put them under a child capability instead.";
+    }
+  });
+}
+
+function flashNav(text){
+  const note=$("navnote"); if(!note) return;
+  note.textContent=text; note.classList.add("show");
+  clearTimeout(flashNav._t); flashNav._t=setTimeout(()=>note.classList.remove("show"),2600);
+}
+async function addNodeRelative(n,rel,name,kind){
+  const parentId = rel==="child" ? n.id : (n.parent_id||null);   // sibling of a root is a new root
+  const forced = rel==="sibling" ? (n.kind||KIND_CAP) : forcedChildKind(parentId);
+
+  // ⚠ REFUSE, never silently coerce. The earlier version quietly rewrote the
+  // requested kind to the forced one, which produced data nodes the user had
+  // not asked for and read, correctly, as the rule not working. A disabled
+  // button is the first line of defence and it can go STALE: the add input
+  // deliberately stays open after each entry, so the buttons beside it are not
+  // re-evaluated. That is exactly how "data 1/2/3" were created by clicking a
+  // "+ child" button that had been correct when it was drawn.
+  if(rel==="child" && forced && kind && forced!==kind){
+    flashNav("Can't add a "+kind+" node here — “"+n.name+"” already has "+forced+
+             " children, and children must all be one kind.");
+    return false;
+  }
+
+  const k = forced || kind || KIND_CAP;
+  const body={ project_id:S.projectId, parent_id:parentId, name, kind:k,
+               is_evaluable:true, is_essential:true, sort_order:nextSortOrder(parentId) };
+  const res=await saveOp(()=>api("nodes",{method:"POST",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify(body)}));
+  if(!res) return false;
+  S.nodes.push((await res.json())[0]);
+  if(parentId) S.collapsed.delete(parentId);
+  renderTree();
+  // rebuild just the children row — a full re-render would destroy the open input
+  if(rel==="child"){ refreshKidsRow(n); syncChildAddButtons(n.id); }
+  return true;
+}
+function refreshKidsRow(n,col){
+  col = col || document.querySelector(".curcol");   // passed in at render, looked up on live adds
+  if(!col) return;
+  let row=col.querySelector(".kidsrow");
+  if(!row){ row=el("div","kidsrow"); col.appendChild(row); }
+  row.innerHTML="";
+  childrenOf(n.id).forEach(k=>{
+    const pill=el("button","npill kid"+(isData(k)?" datakid":""),k.name);
+    pill.title="Go to “"+k.name+"”";
+    pill.addEventListener("click",()=>goTo(k.id));
+    row.appendChild(pill);
+  });
+}
+
+// Below builder, Build mode is still reachable — an evaluator needs it to
+// attach evidence — but it becomes a reading room: the node, its aliases, its
+// screenshots, and the ✉ note control. Nothing that changes the structure.
+function renderBuildReadOnly(r,n){
+  if(S.cameFrom==="evaluate"){
+    const back=el("button","backchip","← Back to Evaluate");
+    back.addEventListener("click",()=>{ S.cameFrom=null; setMode("evaluate"); });
+    r.appendChild(back);
+  }
+  r.appendChild(el("h2",null,n.name));
+  if(isData(n)) r.appendChild(el("div","datatag","data element"));
+  const ps=el("div","field");
+  ps.appendChild(el("label",null,"Problem solved"));
+  ps.appendChild(el("div","kv", n.problem_solved || "Not recorded."));
+  r.appendChild(ps);
+  const pd=el("div","field");
+  pd.appendChild(el("label",null,"Details"));
+  pd.appendChild(el("div","kv", n.details || "Not recorded."));
+  r.appendChild(pd);
+  if(holdRoot(n)) r.appendChild(el("div","kv bad","On hold — not ready to evaluate yet."));
+
+  const nbar=el("div","kv"); nbar.style.marginTop="10px";
+  nbar.appendChild(document.createTextNode("Something the administrator should know about this node?"));
+  nbar.appendChild(noteButton(n,()=>{ renderTree(); renderRight(); }));
+  const bdot=noteDot(n); if(bdot) nbar.appendChild(bdot);
+  r.appendChild(nbar);
+
+  renderShotBlock(r,n);
+  renderAliasBlock(r,n);
+}
+
+function renderBuild(r,n){
+  if(!atLeast("builder")) return renderBuildReadOnly(r,n);
+
+  const nameF=el("div","field"); nameF.appendChild(el("label",null,"Name"));
+  const nameI=Object.assign(el("input"),{value:n.name}); nameF.appendChild(nameI); r.appendChild(nameF);
+
+  // Problem solved: a node that can't name a problem may be vanity, redundant,
+  // or mis-decomposed. Soft prompt only — no hard gate (backlog #10).
+  const defF=el("div","field");
+  defF.appendChild(el("label",null,"Problem solved"));
+  const defI=el("textarea");
+  defI.placeholder="What problem or business requirement does this node address?";
+  defI.value=n.problem_solved||""; defF.appendChild(defI); r.appendChild(defF);
+
+  const detF=el("div","field");
+  detF.appendChild(el("label",null,"Details"));
+  const detI=el("textarea");
+  detI.placeholder = isData(n)
+    ? "What this element holds — format, allowed values, whether it is required…"
+    : "How this works, or the kinds of information involved…";
+  detI.value=n.details||""; detF.appendChild(detI); r.appendChild(detF);
+
+  // The Evaluable and Essential checkboxes were removed 2026-08-30.
+  //   is_evaluable was PROVABLY INERT — nothing in this file ever branched on
+  //     it. Its only consumer was node_rollup, which D9 stopped reading.
+  //   is_essential drove an "opt"/"optional" badge, but its label promised it
+  //     "counts in roll-up" and there is no roll-up since D9. A control whose
+  //     stated reason is dead is worse than no control.
+  // Both COLUMNS remain (not null, default true) and both stay in the history
+  // field labels, so old audit entries still read correctly. See S11/D2 — this
+  // is the last of the two-type node model abandoned in Session 3, and the
+  // question it was asking is reopened properly by node `kind`.
+
+  const save=el("button","btn","Save changes");
+  const msg=el("div","msg");
+  save.addEventListener("click",async()=>{
+    const newName=nameI.value.trim()||n.name, newProb=defI.value.trim()||null;
+    // Warn, don't block: meaning-changing edits are allowed, but the ratings
+    // riding on them deserve a moment's thought — and get flagged stale after.
+    const meaningMoved = MEANING_TRACKING &&
+      (newName!==n.name || newProb!==(n.problem_solved||null));
+    const riders = meaningMoved ? ratingsUnder(n.id) : 0;
+    if(riders && !confirm(
+        "This changes what “"+n.name+"” means, and "+riders+" rating"+(riders>1?"s":"")+
+        " already ride on it or its descendants.\n\nThe edit is allowed and will be logged, "+
+        "and affected ratings will be flagged stale for review.\n\nContinue?")) return;
+    const body={ name:newName, problem_solved:newProb, details:detI.value.trim()||null };
+    const res=await saveOp(()=>api("nodes?id=eq."+n.id,{method:"PATCH",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify(body)}));
+    if(res){
+      const u=(await res.json())[0]; Object.assign(n,u);
+      if(meaningMoved) await loadMeaningChanges();     // staleness recomputes from the log
+      msg.className="msg ok"; msg.textContent="Saved."+(riders?" "+riders+" rating(s) flagged for review.":"");
+      renderTree();
+    }
+    else { msg.className="msg bad"; msg.textContent="Save failed — see the status indicator up top."; }
+  });
+  r.appendChild(save);
+
+  const hist=el("button","btn ghost sm","History");
+  hist.style.marginLeft="8px";
+  hist.addEventListener("click",()=>openHistory(n));
+  r.appendChild(hist);
+
+  const del=el("button","btn ghost sm","Delete node");
+  del.style.marginLeft="8px";
+  del.addEventListener("click",async()=>{
+    if(!confirm("Delete “"+n.name+"” and all its descendants? This can't be undone."))return;
+    const res=await api("nodes?id=eq."+n.id,{method:"DELETE"});
+    if(res.ok){ S.currentId=n.parent_id; await reload(); }
+    else { msg.className="msg bad"; msg.textContent="Delete failed: "+(await res.text()); }
+  });
+  r.appendChild(del);
+  r.appendChild(msg);
+
+  const hint=el("div","kv"); hint.innerHTML="Use the box on the left to rapidly add children under this node.";
+  r.appendChild(hint);
+
+  if(S.cameFrom==="evaluate"){
+    const back=el("button","backchip","← Back to Evaluate");
+    back.addEventListener("click",()=>{ S.cameFrom=null; setMode("evaluate"); });
+    r.insertBefore(back, r.firstChild);
+  }
+  const nbar=el("div","kv"); nbar.style.marginTop="10px";
+  nbar.appendChild(document.createTextNode("Something the administrator should know about this node?"));
+  nbar.appendChild(noteButton(n,()=>{ renderTree(); renderRight(); }));
+  const bdot=noteDot(n); if(bdot) nbar.appendChild(bdot);
+  r.appendChild(nbar);
+
+  renderShotBlock(r,n);
+  renderAliasBlock(r,n);
+  renderMoveBlock(r,n);
+}
+
+/* ---------- ALIASES (per node × system vocabulary) ----------
+   An alias is a FACT about a system, not a judgment: shared across the project,
+   no evaluator axis, one term per node × system. Meaning-preserving, so it
+   stays editable regardless of evaluation readiness.                          */
+function aliasesFor(nodeId){
+  return S.aliases.filter(a=>a.node_id===nodeId)
+    .sort((a,b)=>{
+      const sa=S.systems.find(s=>s.id===a.system_id), sb=S.systems.find(s=>s.id===b.system_id);
+      return (sa?sa.name:"").localeCompare(sb?sb.name:"");
+    });
+}
+// The selected system's own word for a node, or null. Exact match on
+// system_id only — an alias belongs to one system and must never be borrowed
+// from another, which would put a competitor's vocabulary on screen during
+// that vendor's session.
+function aliasTermFor(nodeId, systemId){
+  if(!systemId) return null;
+  const a = S.aliases.find(x => x.node_id===nodeId && x.system_id===systemId);
+  return (a && a.term && a.term.trim()) ? a.term.trim() : null;
+}
+
+function renderAliasBlock(r,n){
+  const box=el("div","moveblock");
+  box.appendChild(el("div","mvttl","Aliases — what each system calls this"));
+
+  if(!S.systems.length){
+    box.appendChild(el("div","kv","No systems yet. Add them in ⚙ Settings first."));
+    r.appendChild(box); return;
+  }
+
+  const list=el("div","aliaslist");
+  const mine=aliasesFor(n.id);
+  if(!mine.length) list.appendChild(el("div","kv","None recorded yet."));
+  mine.forEach(a=>list.appendChild(aliasRow(a,n,box)));
+  box.appendChild(list);
+
+  if(!atLeast("builder")){ r.appendChild(box); return; }   // aliases are readable by all, editable by builders
+
+  const used=new Set(mine.map(a=>a.system_id));
+  const free=S.systems.filter(s=>!used.has(s.id));
+  const slot=el("div","addslot"); slot.style.marginTop="10px";
+  if(!free.length){
+    slot.appendChild(el("span","kv","Every system has a term for this node."));
+  } else {
+    const btn=el("button","addbtn","+ add alias");
+    btn.addEventListener("click",()=>aliasForm(slot,n,null,free,box));
+    slot.appendChild(btn);
+  }
+  box.appendChild(slot);
+  r.appendChild(box);
+}
+
+function aliasRow(a,n,box){
+  const row=el("div","aliasrow");
+  const sys=S.systems.find(s=>s.id===a.system_id);
+  const code=el("span","acode",sys?(sys.code||sys.name.slice(0,3).toUpperCase()):"???");
+  code.title=sys?sys.name:"unknown system";
+  row.appendChild(code);
+  const mid=el("div","amid");
+  mid.appendChild(el("div","aterm",a.term));
+  if(a.note) mid.appendChild(el("div","anote",a.note));
+  row.appendChild(mid);
+  if(!atLeast("builder")) return row;
+
+  const edit=el("button","btn ghost sm","Edit");
+  edit.addEventListener("click",()=>{
+    const slot=el("div"); row.replaceWith(slot);
+    aliasForm(slot,n,a,[sys].filter(Boolean),box);
+  });
+  row.appendChild(edit);
+
+  const del=el("button","btn ghost sm","Delete");
+  del.style.marginLeft="4px";
+  del.addEventListener("click",async()=>{
+    if(!confirm("Remove the "+(sys?sys.name:"system")+" term “"+a.term+"” for this node?")) return;
+    const res=await saveOp(()=>api("aliases?id=eq."+a.id,{method:"DELETE"}));
+    if(res){ S.aliases=S.aliases.filter(x=>x.id!==a.id); renderRight(); }
+  });
+  row.appendChild(del);
+  return row;
+}
+
+// One form for both add and edit; `existing` null means add.
+function aliasForm(slot,n,existing,systems,box){
+  slot.innerHTML="";
+  const f=el("div","aliasform");
+  const sysSel=el("select");
+  systems.forEach(s=>sysSel.appendChild(Object.assign(el("option",null,s.name),{value:s.id})));
+  if(existing) sysSel.value=existing.system_id;
+  if(existing) sysSel.disabled=true;         // changing the system is a different alias
+  f.appendChild(sysSel);
+
+  const term=Object.assign(el("input"),{placeholder:"This system's term",value:existing?existing.term:""});
+  const note=Object.assign(el("input"),{placeholder:"Note (optional) — e.g. “pro edition only”",value:existing&&existing.note?existing.note:""});
+  note.style.minWidth="220px";
+  f.appendChild(term); f.appendChild(note);
+
+  const save=el("button","btn sm",existing?"Save":"Add");
+  const cancel=el("button","btn ghost sm","Cancel");
+  cancel.addEventListener("click",()=>renderRight());
+  const msg=el("div","smsg");
+
+  const commit=async()=>{
+    const t=term.value.trim();
+    if(!t){ msg.className="smsg bad"; msg.textContent="A term is required."; return; }
+    const body={ term:t, note:note.value.trim()||null };
+    let res;
+    if(existing){
+      res=await saveOp(()=>api("aliases?id=eq."+existing.id,{method:"PATCH",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify(body)}));
+      if(res) Object.assign(existing,(await res.json())[0]);
+    } else {
+      res=await saveOp(()=>api("aliases",{method:"POST",headers:{...H,"Prefer":"return=representation"},
+        body:JSON.stringify({...body, project_id:S.projectId, node_id:n.id, system_id:sysSel.value})}));
+      if(res) S.aliases.push((await res.json())[0]);
+    }
+    if(res) renderRight();
+    else { msg.className="smsg bad"; msg.textContent="Couldn't save — this system may already have a term for this node."; }
+  };
+  save.addEventListener("click",commit);
+  term.addEventListener("keydown",e=>{ if(e.key==="Enter") commit(); });
+  note.addEventListener("keydown",e=>{ if(e.key==="Enter") commit(); });
+
+  f.appendChild(save); f.appendChild(cancel);
+  slot.appendChild(f); slot.appendChild(msg);
+  term.focus();
+}
+
+/* ---------- MOVE / RE-PARENT ---------- */
+function renderMoveBlock(r,n){
+  // --- evaluation-ready signal (softened freeze) ---
+  const rb=el("div","moveblock");
+  rb.appendChild(el("div","mvttl","Ready to evaluate"));
+  const hr=holdRoot(n);
+  const rw=el("div","checks");
+  const rchk=Object.assign(el("input"),{type:"checkbox",checked:!!n.evaluation_ready});
+  const rlbl=el("label"); rlbl.appendChild(rchk);
+  rlbl.appendChild(el("span",null,"Ready to evaluate (this node and everything under it)"));
+  rw.appendChild(rlbl); rb.appendChild(rw);
+  if(hr && hr.id!==n.id){
+    rb.appendChild(el("div","kv bad","Held back by “"+hr.name+"” — an ancestor is unchecked, so this branch cannot be rated until that one is ticked again."));
+  }
+  rb.appendChild(el("div","kv","On by default: new nodes are open for rating straight away. Uncheck it while there is work to do — evaluators then cannot rate this node or anything under it, and it shows as ON HOLD. Editing is never blocked; edits are logged and flag affected ratings stale."));
+  rchk.addEventListener("change",async()=>{
+    const res=await saveOp(()=>api("nodes?id=eq."+n.id,{method:"PATCH",headers:{...H,"Prefer":"return=representation"},
+      body:JSON.stringify({evaluation_ready:rchk.checked})}));
+    if(res){ Object.assign(n,(await res.json())[0]); renderTree(); renderRight(); }
+    else rchk.checked=!rchk.checked;
+  });
+  r.appendChild(rb);
+
+  // --- move / re-parent ---
+  const box=el("div","moveblock");
+  box.appendChild(el("div","mvttl","Move (re-parent)"));
+
+  const kids=descendantIds(n.id);                       // self + subtree: never valid targets
+  const targets=S.nodes.filter(t=>!kids.has(t.id)).map(t=>({t,path:pathOf(t)}))
+                       .sort((a,b)=>a.path.localeCompare(b.path));
+
+  const f=el("div","field"); f.appendChild(el("label",null,"New parent"));
+  const sel=el("select");
+  sel.appendChild(Object.assign(el("option",null,"— Top level (no parent) —"),{value:""}));
+  targets.forEach(({t,path})=>sel.appendChild(Object.assign(el("option",null,path),{value:t.id})));
+  sel.value = n.parent_id || "";
+  f.appendChild(sel); box.appendChild(f);
+
+  const btn=el("button","btn ghost sm","Move node");
+  const mmsg=el("div","msg");
+  btn.addEventListener("click",async()=>{
+    const newParent = sel.value || null;
+    if((n.parent_id||null)===newParent){ mmsg.className="msg bad"; mmsg.textContent="That's already its parent — nothing to move."; return; }
+    const where = newParent ? "under “"+nodeById(newParent).name+"”" : "to the top level";
+    const count = kids.size-1;
+    const riders = ratingsUnder(n.id);   // context is part of meaning, so a move counts
+    let warn="Move “"+n.name+"” "+where+"?"+(count?" Its "+count+" descendant"+(count>1?"s":"")+" move with it.":"");
+    if(riders) warn+="\n\n"+riders+" rating"+(riders>1?"s":"")+" ride on this subtree. Context is part of a node's meaning, so they'll be flagged stale for review.";
+    if(!confirm(warn)) return;
+    const res=await saveOp(()=>api("nodes?id=eq."+n.id,{method:"PATCH",headers:{...H,"Prefer":"return=representation"},
+      body:JSON.stringify({parent_id:newParent})}));
+    if(res){
+      await reload();
+      ancestorsOf(n.id).forEach(a=>S.collapsed.delete(a.id));   // reveal it in its new home
+      renderTree(); renderRight();
+    } else {
+      mmsg.className="msg bad"; mmsg.textContent="Move failed — see the status indicator up top.";
+      box.appendChild(mmsg);
+    }
+  });
+  box.appendChild(btn); box.appendChild(mmsg);
+  box.appendChild(el("div","kv","Its whole subtree travels with it. A node can't be moved into its own descendants, so those aren't listed."));
+  r.appendChild(box);
+}
+
+function orderedForMatrix(){
+  // depth-first list of nodes with depth, for matrix rows.
+  // If a specific domain is selected, only that subtree is shown.
+  const out=[];
+  const walk=(n,d)=>{ out.push({node:n,depth:d}); childrenOf(n.id).forEach(c=>walk(c,d+1)); };
+  if(S.evalDomain && S.evalDomain!=="all"){
+    const dom=nodeById(S.evalDomain);
+    if(dom) walk(dom,0);
+  } else {
+    roots().forEach(r=>walk(r,0));
+  }
+  return out;
+}
+
+function renderMatrix(r){
+  if(!S.systems.length){ r.appendChild(el("div","empty","No systems yet. Add systems in ⚙ Settings first.")); return; }
+
+  // header: who's evaluating + co-evaluator + domain filter
+  const bar=el("div","evalbar");
+  // Identity is no longer a choice — you rate as whoever signed in. The picker
+  // it replaces let one laptop be passed around a table; that convenience is
+  // exactly what made attribution untrustworthy.
+  const mine=myEvaluatorFor();
+  const whoWrap=el("div","evalwho");
+  whoWrap.appendChild(el("span","elbl","Evaluating as"));
+  const whoName=el("div","evalme");
+  whoName.appendChild(el("span","evalmenm", S.evaluator));
+  const assigned=mine && mine.default_system_id
+    ? S.systems.find(s=>s.id===mine.default_system_id) : null;
+  if(assigned) whoName.appendChild(el("span","evalmesys","assigned: "+assigned.name));
+  whoWrap.appendChild(whoName);
+  if(!mine && !atLeast("admin")){
+    whoWrap.appendChild(el("div","kv bad","You are not on this project's evaluator list. An administrator has to add you before your ratings can be recorded."));
+  }
+
+  const coWrap=el("div","evalwho");
+  coWrap.appendChild(el("span","elbl","Co-evaluator present (optional)"));
+  const co=Object.assign(el("input"),{placeholder:"name, if working side by side",value:S.coEvaluator||""});
+  co.addEventListener("change",()=>{ S.coEvaluator=co.value.trim()||null; });
+  coWrap.appendChild(co);
+
+  const domWrap=el("div","evalwho");
+  domWrap.appendChild(el("span","elbl","Domain to evaluate"));
+  const dom=el("select");
+  dom.appendChild(Object.assign(el("option",null,"All domains"),{value:"all"}));
+  const currentRoots=roots();
+  currentRoots.forEach(d=>dom.appendChild(Object.assign(el("option",null,d.name),{value:d.id})));
+  // defensive: if the remembered domain is no longer a valid root (tree changed,
+  // project switched, node deleted), fall back to "all" so the matrix never
+  // silently filters to an empty set.
+  if(S.evalDomain!=="all" && !currentRoots.some(d=>d.id===S.evalDomain)){
+    S.evalDomain="all";
+  }
+  dom.value=S.evalDomain;
+  dom.addEventListener("change",()=>{ S.evalDomain=dom.value; renderRight(); });
+  domWrap.appendChild(dom);
+
+  bar.appendChild(whoWrap); bar.appendChild(coWrap); bar.appendChild(domWrap);
+  const stales=allStale();
+  if(stales.length){
+    const sWrap=el("div","evalwho");
+    sWrap.appendChild(el("span","elbl","Needs review"));
+    const sBtn=el("button","btn ghost sm",stales.length+" stale rating"+(stales.length>1?"s":""));
+    sBtn.addEventListener("click",openStaleReport);
+    sWrap.appendChild(sBtn);
+    bar.appendChild(sWrap);
+  }
+  r.appendChild(bar);
+
+  // legend
+  const lg=el("div","legend");
+  S.scaleValues.forEach(v=>{
+    const w=el("span");
+    const b=el("span","box on", v.code || (v.label||"?").slice(0,1).toUpperCase());
+    b.style.background=v.color; b.style.color=ink(v.color); b.style.cursor="default";
+    w.appendChild(b); w.appendChild(document.createTextNode(" "+v.label));
+    lg.appendChild(w);
+  });
+  const hint=el("span","elbl","click a letter to set · click it again to clear");
+  lg.appendChild(hint);
+  r.appendChild(lg);
+
+  // the matrix: rows = nodes, cols = systems
+  const wrap=el("div","matrixwrap");
+  const tbl=el("table","matrix");
+
+  /* ⚠ TWO HEADER ROWS NOW: system, then the channels IT ACTUALLY OFFERS.
+     Columns are built from `channelsFor(system)`, never from a global list,
+     because a missing channel IS "not applicable" and must cost nothing.
+     Limo Anywhere shows Office·Web and Customer·Web and no third column. */
+  const cols = [];                       // flattened [{sys, chan, first}]
+  S.systems.forEach(s=>{
+    channelsFor(s.id).forEach((c,i)=> cols.push({ sys:s, chan:c, first:i===0 }));
+  });
+
+  if(!cols.length){
+    r.appendChild(el("div","empty",
+      "No channels defined yet. Every system needs at least one — add them in ⚙ Settings → Systems."));
+    return;
+  }
+
+  const h1=el("tr");
+  h1.appendChild(el("th","gut",""));
+  h1.appendChild(el("th","corner","Feature"));
+  S.systems.forEach(s=>{
+    const list=channelsFor(s.id);
+    if(!list.length) return;             // a system with no channels has no columns
+    const th=el("th","sysname"+(assigned && s.id===assigned.id?" assignedcol":""));
+    th.colSpan=list.length;
+    th.appendChild(document.createTextNode(s.name));
+    if(s.code) th.appendChild(Object.assign(el("span","scode"),{textContent:s.code}));
+    th.title = s.name + (assigned && s.id===assigned.id ? " — your assigned system" : "");
+    h1.appendChild(th);
+  });
+  tbl.appendChild(h1);
+
+  const h2=el("tr");
+  h2.appendChild(el("th","gut",""));
+  h2.appendChild(el("th","corner",""));
+  cols.forEach(col=>{
+    const th=el("th","chan"+(col.first?" first":"")
+                    +(assigned && col.sys.id===assigned.id?" assignedcol":""));
+    th.appendChild(document.createTextNode(col.chan.short_name||col.chan.audience));
+    th.appendChild(Object.assign(el("span","csurf"),{textContent:col.chan.surface}));
+    th.title = col.sys.name+" · "+channelLabel(col.chan)
+             + (col.chan.description ? "\n"+col.chan.description : "");
+    h2.appendChild(th);
+  });
+  tbl.appendChild(h2);
+
+  orderedForMatrix().forEach(item=>{
+    const n=item.node;
+    const tr=el("tr");
+    // gutter: actions live here, not beside the name — indentation made the
+    // right-hand edge ragged and the buttons wandered with it
+    const gut=el("td","gut");
+    gut.appendChild(noteButton(n,()=>renderRight()));
+    const addb=el("button","shotbtn","⛶");
+    addb.title="Add evidence for “"+n.name+"” in Build mode";
+    addb.addEventListener("click",()=>{ S.cameFrom="evaluate"; goTo(n.id); });
+    gut.appendChild(addb);
+    const mdot=noteDot(n); if(mdot) gut.appendChild(mdot);
+    if(shotsFor(n.id,null).length){                       // untagged: no cell to sit on
+      const m=el("span","shotmark","◳");
+      m.title=shotsFor(n.id,null).length+" screenshot(s) not tied to a system";
+      m.style.cursor="pointer";
+      m.addEventListener("click",()=>shotLightbox(shotsFor(n.id,null)[0],n));
+      gut.appendChild(m);
+    }
+    tr.appendChild(gut);
+
+    const held=holdRoot(n);
+    const nameTd=el("td","mname depth"+Math.min(item.depth,4)+(held?" heldname":""));
+    nameTd.appendChild(el("span","mnm",n.name));
+    if(held){
+      const h=el("span","heldtag","on hold");
+      h.title = held.id===n.id
+        ? "Held back — not ready to evaluate yet"
+        : "Held back by “"+held.name+"”, an ancestor that is not ready to evaluate";
+      nameTd.appendChild(h);
+    }
+    tr.appendChild(nameTd);
+    cols.forEach(col=>{
+      const s=col.sys, ch=col.chan;
+      const td=el("td","cell"+(col.first?" first":"")
+                     +(assigned && s.id===assigned.id ? " assignedcol" : ""));
+      // Screenshots are tagged per node × SYSTEM, not per channel — evidence is
+      // a picture of the product, not of one audience's view of it. So the fold
+      // sits on the system's first channel column only, or it would repeat.
+      if(col.first){ const fold=shotFold(n,s.id); if(fold) td.appendChild(fold); }
+
+      const ex=ratingFor(n.id, s.id, ch.id);
+
+      // 3a — authorship in the background, support level in the box.
+      if(ex) td.classList.add(ratingIsMine(ex) ? "minecell" : "othercell");
+
+      const stale=ex?staleFor(ex):null;
+      if(stale){
+        td.classList.add("stalecell");
+        const flag=el("span","staleflag","!");
+        flag.title="Rated before this node last changed ("+stale.fields.join(", ")+", "+auditWhen(stale.at)+"). Worth re-checking.";
+        td.appendChild(flag);
+      }
+
+      const locked = !!held || (!mine && !atLeast("admin"));
+      if(held){
+        td.classList.add("heldcell");
+        td.title = held.id===n.id
+          ? "“"+n.name+"” is not ready to evaluate yet"
+          : "Held back by “"+held.name+"” — an ancestor is not ready to evaluate";
+      } else if(locked){
+        td.title = "You are not on this project's evaluator list, so ratings cannot be attributed to you.";
+      }
+
+      /* One box per scale value. Clicking the box that is already on CLEARS
+         the rating — the mockup's behaviour, and the reason there is no "—"
+         option taking up a fifth box. */
+      const grp=el("span","boxgrp");
+      S.scaleValues.forEach(v=>{
+        const b=el("span","box"+(locked?" off":""), v.code || (v.label||"?").slice(0,1).toUpperCase());
+        const on = ex && ex.scale_value_id===v.id;
+        if(on){
+          b.classList.add("on");
+          b.style.background=v.color;
+          b.style.color=ink(v.color);
+        }
+        b.title = s.name+" · "+channelLabel(ch)+" · "+v.label
+                + (on ? "  (click to clear)" : "")
+                + (ex && !ratingIsMine(ex) ? "\nCurrently rated by "+raterName(ex)
+                     +" — changing it records it as yours." : "");
+        if(!locked){
+          b.addEventListener("click", async()=>{
+            // click the live one to clear, any other to set
+            await saveRatingFor(n, s.id, ch.id, on ? "" : v.id);
+            renderRight();
+          });
+        }
+        grp.appendChild(b);
+      });
+      td.appendChild(grp);
+
+      if(ex && !ratingIsMine(ex)){
+        const who=el("span","othertick","●");
+        who.title="Rated by "+raterName(ex)+", not you. You can change it — it will then be recorded as yours.";
+        td.appendChild(who);
+      }
+      tr.appendChild(td);
+    });
+    tbl.appendChild(tr);
+  });
+  wrap.appendChild(tbl);
+  r.appendChild(wrap);
+}
+
+async function saveRatingFor(n,systemId,channelId,scaleValueId){
+  // Attribution is resolved before the write, never taken from the browser.
+  // evaluator_id is the trustworthy column; the evaluator text stays alongside
+  // it as a readable snapshot of the name at the time of rating.
+  const mine = await ensureMyEvaluator();
+
+  // REFUSE rather than write an unattributed row.
+  //
+  // Previously this wrote evaluator_id:null when you had no membership row,
+  // producing a rating attributed to nobody. Under migration 21's
+  // UNIQUE (node_id, system_id) a second attempt now collides with a 409
+  // rather than quietly doubling up, but an unattributed row is still wrong:
+  // the whole point of one-rating-per-cell is that you can see WHOSE it is.
+  // Saying no out loud is the honest answer, and it is the same condition the
+  // Evaluate panel already warns about.
+  if(!mine){
+    setSave("failed");
+    flashNav("Not saved — you are not on this project's evaluator list. An administrator has to add you.");
+    renderRight();          // puts the dropdown back to what the database says
+    return;
+  }
+
+  // ⚠ channel_id is NOT NULL in the database (migration 22). Refuse here
+  // rather than let PostgREST bounce it with a 400 nobody reads.
+  if(!channelId){
+    setSave("failed");
+    flashNav("Not saved — no channel selected for this system. Add one in ⚙ Settings → Systems.");
+    return;
+  }
+
+  const ex = ratingFor(n.id, systemId, channelId);
+
+  /* ⚠ DO NOT read the response body inside the saveOp callback, and do not
+     mutate S.evals in there either.
+
+     saveOp has to CLONE the response to spot an RLS refusal (200 + []), and a
+     Response whose body has already been consumed CANNOT be cloned — the clone
+     throws, the check swallows it, and the refusal sails through reporting
+     "Saved" exactly as before the fix. A check that cannot fail is not a check.
+
+     So the callback returns the Response untouched and every state change
+     happens below, only once saveOp has confirmed the database actually did it.
+
+     The DELETE now asks for the representation too, so a REFUSED delete is
+     caught as well — without the header it answers 204 and looks identical to
+     a successful one. */
+  let op = null;
+  const res = await saveOp(()=>{
+    if(scaleValueId===""){
+      if(!ex) return null;                                  // nothing to clear
+      op = "delete";
+      return api("evaluations?id=eq."+ex.id,
+        { method:"DELETE", headers:{...H,"Prefer":"return=representation"} });
+    }
+    if(ex){
+      op = "update";
+      return api("evaluations?id=eq."+ex.id,
+        { method:"PATCH", headers:{...H,"Prefer":"return=representation"},
+          body:JSON.stringify({ scale_value_id:scaleValueId, co_evaluator:S.coEvaluator,
+                                evaluator_id:mine.id }) });
+    }
+    op = "insert";
+    return api("evaluations",
+      { method:"POST", headers:{...H,"Prefer":"return=representation"},
+        body:JSON.stringify({ project_id:n.project_id, node_id:n.id, system_id:systemId,
+                              channel_id:channelId,
+                              evaluator:S.evaluator, co_evaluator:S.coEvaluator,
+                              evaluator_id:mine.id, scale_value_id:scaleValueId }) });
+  });
+
+  if(!op) return;                                  // no-op: cleared an empty cell
+
+  if(!res){
+    // saveOp already set the pill to "failed" and stashed the reason.
+    flashNav("Not saved — "+(lastSaveError||"the write did not go through")+
+             " Your rating is NOT recorded.");
+    renderRight();                                 // show what the database says
+    return;
+  }
+
+  const rows = await res.json().catch(()=>[]);
+  if(op==="delete")      S.evals = S.evals.filter(e=>e.id!==ex.id);
+  else if(op==="update") Object.assign(ex, rows[0]);
+  else                   S.evals.push(rows[0]);
+  // S.evals is now current, and the tree swatch reads S.evals directly (D9), so
+  // repaint the tree. The right panel is NOT re-rendered: the user is mid-edit
+  // in it and rebuilding would blow away focus and scroll position.
+  renderTree();
+}
+
+function renderChart(r){
+  if(!S.systems.length){ r.appendChild(el("div","empty","No systems yet. Add systems in ⚙ Settings.")); return; }
+  r.appendChild(el("h2",null,"Support chart"));
+
+  // controls: toggle single vs multi, and (single mode) which system
+  const ctl=el("div","chartctl");
+  const toggle=el("div","seg");
+  const bSingle=el("button",null,"Single system"); const bMulti=el("button",null,"All systems");
+  (S.chartMulti?bMulti:bSingle).classList.add("on");
+  bSingle.addEventListener("click",()=>{ S.chartMulti=false; renderRight(); });
+  bMulti.addEventListener("click",()=>{ S.chartMulti=true; renderRight(); });
+  toggle.appendChild(bSingle); toggle.appendChild(bMulti); ctl.appendChild(toggle);
+
+  if(!S.chartMulti){
+    const sp=el("select");
+    S.systems.forEach(s=>sp.appendChild(Object.assign(el("option",null,s.name+(s.code?" ("+s.code+")":"")),{value:s.id})));
+    sp.value=S.currentSystem||(S.systems[0]&&S.systems[0].id);
+    sp.addEventListener("change",()=>{ S.currentSystem=sp.value; renderRight(); });
+    ctl.appendChild(sp);
+  }
+
+  // Domain filter — the SAME S.evalDomain the matrix uses, so switching modes
+  // keeps you looking at the same part of the tree instead of silently widening.
+  const dsel=el("select");
+  dsel.appendChild(Object.assign(el("option",null,"All domains"),{value:"all"}));
+  const allRoots=roots();
+  allRoots.forEach(d=>dsel.appendChild(Object.assign(el("option",null,d.name),{value:d.id})));
+  // defensive: a remembered domain may no longer be a root (moved, deleted,
+  // project switched) — same guard the matrix uses
+  if(S.evalDomain!=="all" && !allRoots.some(d=>d.id===S.evalDomain)) S.evalDomain="all";
+  dsel.value=S.evalDomain;
+  dsel.title="Which top-level domain to chart";
+  dsel.addEventListener("change",()=>{ S.evalDomain=dsel.value; renderRight(); });
+  ctl.appendChild(dsel);
+
+  /* ⚠ WHICH CHANNEL IS THIS CHART ABOUT? With B18 a node has a rating per
+     system PER CHANNEL, and a single card cannot honestly show several. The
+     matrix is the place to see them all at once; here you pick one, and the
+     picker states it out loud so nobody reads an Office·Desktop chart as if
+     it covered the customer-facing web. */
+  const chanList = S.chartMulti ? S.channels : channelsFor(S.currentSystem);
+  if(chanList.length > 1 || (!S.chartMulti && chanList.length)){
+    const csel=el("select");
+    channelsFor(S.currentSystem).forEach(c=>
+      csel.appendChild(Object.assign(el("option",null,channelLabel(c)),{value:c.id})));
+    const cur=currentChannelFor(S.currentSystem);
+    if(cur) csel.value=cur.id;
+    csel.title="Which channel this chart is about";
+    csel.addEventListener("change",()=>{ S.currentChannel=csel.value; renderTree(); renderRight(); });
+    if(S.chartMulti){
+      csel.disabled=true;
+      csel.title="All-systems mode shows each system's first channel. Switch to Single system to choose.";
+    }
+    ctl.appendChild(csel);
+  }
+
+  r.appendChild(ctl);
+
+  // legend
+  const lg=el("div","legend");
+  S.scaleValues.forEach((v,i)=>{ const s=el("span"); const c=el("span","chip"); c.style.background=v.color;
+    s.appendChild(c); s.appendChild(document.createTextNode((S.chartMulti?((i+1)+" = "):"")+v.label)); lg.appendChild(s); });
+  r.appendChild(lg);
+
+  const list = S.evalDomain==="all" ? allRoots : allRoots.filter(d=>d.id===S.evalDomain);
+  if(!list.length){
+    r.appendChild(el("div","empty", S.evalDomain==="all"
+      ? "No nodes." : "That domain has nothing to chart."));
+    return;
+  }
+  const wrap=el("div","hchart");
+  const col=el("div","hgroup");
+  list.forEach(n=>col.appendChild(chartCardRow(n)));
+  wrap.appendChild(col);
+  r.appendChild(wrap);
+}
+
+// support level (1-based) for a node/system, from that node's OWN rating only.
+// Same rule as colorForSystem — no roll-up, no inheritance. D9.
+function levelFor(nodeId, systemId, channelId){
+  const ch = channelId || (currentChannelFor(systemId) || {}).id;
+  const ex=ratingFor(nodeId, systemId, ch);
+  if(!ex) return null;
+  const idx=S.scaleValues.findIndex(v=>v.id===ex.scale_value_id);
+  if(idx<0) return null;
+  return { num:idx+1, color:S.scaleValues[idx].color, label:S.scaleValues[idx].label };
+}
+function chartCardRow(n){
+  const rowwrap=el("div","hwrap");
+  const card=el("div","hcard");
+  if(S.chartMulti){
+    // multi-system: neutral card with a grid of system:level cells
+    card.classList.add("multi");
+    card.appendChild(el("div","hn",n.name));
+    const grid=el("div","sysgrid");
+    S.systems.forEach(s=>{
+      const lv=levelFor(n.id,s.id);
+      const cell=el("div","syscell");
+      cell.style.background = lv?tint(lv.color,0.55):"#f0f0ee";
+      cell.title = s.name + (lv?": "+lv.label:": not rated");
+      cell.appendChild(el("span","sccode", s.code||s.name.slice(0,3).toUpperCase()));
+      cell.appendChild(el("span","scnum", lv?String(lv.num):"–"));
+      grid.appendChild(cell);
+    });
+    card.appendChild(grid);
+  } else {
+    // single-system: coloured card from this node's own rating for that system
+    const c=colorForSystem(n.id, S.currentSystem);
+    if(c){
+      card.style.background = tint(c.color, 0.82);
+      card.style.borderLeftColor = c.color; card.style.borderLeftWidth="6px";
+      card.style.color = "#1a1a1a"; card.classList.add("filled");
+    } else { card.style.borderLeftColor="var(--none)"; card.style.color="var(--muted)"; }
+    card.appendChild(el("div","hn",n.name));
+    card.appendChild(el("div","hl", c?c.label:"not rated"));
+  }
+  rowwrap.appendChild(card);
+  const kids=childrenOf(n.id);
+  if(kids.length){
+    rowwrap.appendChild(el("div","hconn"));
+    const kidcol=el("div","hgroup");
+    kids.forEach(k=>kidcol.appendChild(chartCardRow(k)));
+    rowwrap.appendChild(kidcol);
+  }
+  return rowwrap;
+}
+// mix a color toward white by amt (0..1) to make a pastel tint
+function tint(hex, amt){
+  const m=/^#?([a-f\\d]{2})([a-f\\d]{2})([a-f\\d]{2})$/i.exec(hex||"");
+  if(!m) return "#eeeeee";
+  let r=parseInt(m[1],16), g=parseInt(m[2],16), b=parseInt(m[3],16);
+  r=Math.round(r+(255-r)*amt); g=Math.round(g+(255-g)*amt); b=Math.round(b+(255-b)*amt);
+  return "#"+[r,g,b].map(x=>x.toString(16).padStart(2,"0")).join("");
+}
+
+/* ---------- QUICK ADD (cascading) ---------- */
+async function quickAdd(){
+  const name=$("quickadd").value.trim(); if(!name) return;
+  const parent=nodeById(S.currentId);
+  const pid=parent?parent.id:null;
+  const body={ project_id:S.projectId, parent_id:pid, name,
+               kind: forcedChildKind(pid) || KIND_CAP,
+               is_evaluable:true, is_essential:true, sort_order:nextSortOrder(pid) };
+  const res=await saveOp(()=>api("nodes",{method:"POST",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify(body)}));
+  if(res){
+    const created=(await res.json())[0];
+    S.nodes.push(created);
+    if(parent) S.collapsed.delete(parent.id);
+    $("quickadd").value="";
+    renderTree(); renderRight(); $("quickadd").focus();
+  }
+}
+
+/* ---------- MULTI-LINE PASTE (S14) ----------
+   Pasting several lines into any add box offers to create one child per line
+   under the current parent. Flat only — indented outlines are NOT turned into
+   hierarchy (declined in the guidelines for complexity/surprise); we detect the
+   indentation and say so instead of silently discarding it.
+
+   Why a paste listener and not a check on .value: these are <input> elements,
+   and the browser flattens newlines on paste. By the time any handler reads
+   .value the structure is already gone.
+
+   Why one POST with an array: forty sequential inserts can fail at seventeen
+   and leave orphans with no record of where it stopped. One request lands or
+   doesn't. -------------------------------------------------------------- */
+
+// single-letter markers only strip before ")" — "A. Fleet" is a plausible name,
+// "a) Fleet" is not.
+const LIST_MARKER = /^[ \t]*(?:[•▪◦‣·*–—-]|\d+[.)]|[a-zA-Z]\))[ \t]+/;
+
+function parsePaste(text){
+  const raw = text.replace(/\r\n?/g, "\n").split("\n");
+  const kept = raw.filter(l => l.trim().length);
+  const blank = raw.length - kept.length;
+
+  const indents = kept.map(l => (l.match(/^[ \t]*/) || [""])[0].replace(/\t/g, "    ").length);
+  const indented = new Set(indents).size > 1;
+
+  let markers = 0;
+  const cleaned = [];
+  for(const line of kept){
+    let s = line;
+    if(LIST_MARKER.test(s)){ s = s.replace(LIST_MARKER, ""); markers++; }
+    s = s.trim();
+    if(s) cleaned.push(s);
+  }
+
+  const seen = new Set(); const names = []; let dupes = 0;
+  for(const n of cleaned){
+    const k = n.toLowerCase();
+    if(seen.has(k)){ dupes++; continue; }
+    seen.add(k); names.push(n);
+  }
+  return { names, indented, markers, dupes, blank };
+}
+
+async function bulkAddNodes(parentId, names, kind){
+  // ⚠ An empty list would POST `[]`, and PostgREST answers `[]` — which the
+  // refusal check in saveOp reads as "the database declined this write". It
+  // would be a false alarm on a request that should never have been sent.
+  if(!names || !names.length) return [];
+  // A pasted block keeps the order it was pasted in — that order is the whole
+  // reason someone pasted a list rather than typing names one at a time.
+  const base = nextSortOrder(parentId);
+  const k = forcedChildKind(parentId) || kind || KIND_CAP;
+  const rows = names.map((name, i) => ({
+    project_id: S.projectId, parent_id: parentId, name, kind: k,
+    is_evaluable: true, is_essential: true, sort_order: base + i
+  }));
+  const res = await saveOp(() => api("nodes", {
+    method: "POST",
+    headers: { ...H, "Prefer": "return=representation" },
+    body: JSON.stringify(rows)
+  }));
+  if(!res) return null;
+  const created = await res.json();
+  created.forEach(c => S.nodes.push(c));
+  if(parentId) S.collapsed.delete(parentId);
+  return created;
+}
+
+function pastePreview(info, parentNode, onConfirm, kind){
+  const names = info.names;
+  const parentLabel = parentNode ? "“" + parentNode.name + "”" : "the top level";
+
+  const existing = new Set(
+    (parentNode ? childrenOf(parentNode.id) : roots()).map(n => n.name.toLowerCase())
+  );
+  const collide = names.filter(n => existing.has(n.toLowerCase()));
+
+  const sorted = names.slice().sort((a,b) => a.localeCompare(b));
+  const alreadyAlpha = names.every((n,i) => n === sorted[i]);
+
+  const ov = el("div","overlay");
+  const modal = el("div","modal");
+  const head = el("div","mhead");
+  head.appendChild(el("h3", null, "Add " + names.length + " children under " + parentLabel + "?"));
+  const x = el("button","x","×"); head.appendChild(x);
+  modal.appendChild(head);
+
+  const body = el("div","mbody");
+
+  if(names.length > 50){
+    const big = el("div","pv-big", names.length + " lines — that is a lot to undo one at a time.");
+    body.appendChild(big);
+  }
+
+  const list = el("div","pv-list");
+  const show = names.length > 50 ? names.slice(0,20) : names;
+  show.forEach(n => list.appendChild(el("span","pv-item", n)));
+  if(show.length < names.length){
+    list.appendChild(el("span","pv-more", "…and " + (names.length - show.length) + " more"));
+  }
+  body.appendChild(list);
+
+  const warn = (cls, txt) => body.appendChild(el("div","pv-note " + cls, txt));
+  if(info.indented)
+    warn("warn", "⚠ Lines appeared indented — all " + names.length +
+                 " will be added at the same level under " + parentLabel + ".");
+  if(info.markers)
+    warn("warn", "⚠ Bullets or numbering removed from " + info.markers +
+                 " line" + (info.markers>1?"s":"") + " — check the names above.");
+  if(info.dupes)
+    warn("warn", "⚠ " + info.dupes + " duplicate line" + (info.dupes>1?"s":"") + " removed.");
+  if(collide.length)
+    warn("warn", "⚠ Already under " + parentLabel + ": " + collide.slice(0,4).join(", ") +
+                 (collide.length>4 ? " and " + (collide.length-4) + " more" : "") +
+                 ". They will be added again.");
+  if(!alreadyAlpha)
+    warn("info", "ℹ Children display alphabetically, not in paste order.");
+
+  const bar = el("div","pv-bar");
+  const ok = el("button","btn", "Add " + names.length);
+  const no = el("button","btn ghost", "Cancel");
+  bar.appendChild(ok); bar.appendChild(no);
+  body.appendChild(bar);
+
+  modal.appendChild(body); ov.appendChild(modal); document.body.appendChild(ov);
+  ok.focus();
+
+  const close = () => { document.removeEventListener("keydown", key); ov.remove(); };
+  const key = e => {
+    if(e.key === "Escape"){ e.preventDefault(); close(); }
+    if(e.key === "Enter"){ e.preventDefault(); go(); }
+  };
+  const go = async () => {
+    ok.disabled = true; no.disabled = true; ok.textContent = "Adding…";
+    const created = await bulkAddNodes(parentNode ? parentNode.id : null, names, kind);
+    close();
+    if(created) onConfirm(created);
+  };
+  ok.addEventListener("click", go);
+  no.addEventListener("click", close);
+  x.addEventListener("click", close);
+  ov.addEventListener("click", e => { if(e.target === ov) close(); });
+  document.addEventListener("keydown", key);
+}
+
+// Returns true if it handled the paste (multi-line); false to let the browser
+// paste normally.
+// `kind` matters only when the paste creates the FIRST children of a node —
+// pasting a list of field names is exactly that case. Once siblings exist,
+// bulkAddNodes takes the kind from them and ignores this.
+function handleMultiPaste(e, parentNode, onConfirm, kind){
+  const text = (e.clipboardData || window.clipboardData).getData("text") || "";
+  if(!/\n/.test(text.trim())) return false;          // single line — behave as today
+  const info = parsePaste(text);
+  if(info.names.length < 2) return false;            // nothing multi-line survived cleaning
+  e.preventDefault();
+  pastePreview(info, parentNode, onConfirm, kind);
+  return true;
+}
+
+/* ---------- NOTES TO ADMINISTRATOR (B14) ----------
+   One free-text message from an evaluator to the administrator, anchored to the
+   node that prompted it. Deliberately UNTYPED — no categories, no kinds. Typed
+   discussion flags clutter the screen and evaluators end up guessing which one
+   to pick; one box, one purpose.
+
+   This replaces two backlog ideas: B12 ("possible decomposition" flag — that's
+   just a note) and B1 (wish-list flag — a mis-capture of "put this on the
+   backlog").
+
+   The affordance has to live in the MATRIX, not only the Build pane: the tree
+   is hidden in Evaluate mode, which is exactly where an evaluator is sitting
+   when they realise a node needs decomposing. ------------------------------ */
+
+function openNotesFor(nodeId){
+  return S.notes.filter(x => x.node_id === nodeId && x.status === "open");
+}
+function openNoteCount(){
+  return S.notes.filter(x => x.status === "open").length;
+}
+function refreshNoteBadge(){
+  const b = $("notesbtn"); if(!b) return;
+  const n = openNoteCount();
+  b.textContent = n ? "✉ Notes (" + n + ")" : "✉ Notes";
+  b.classList.toggle("hasnotes", n > 0);
+}
+
+// small dot shown on a node that already carries an open note, so the same
+// thing doesn't get flagged three times by three people
+function noteDot(node){
+  const open = openNotesFor(node.id);
+  if(!open.length) return null;
+  const d = el("span", "notedot", "●");
+  d.title = open.length + " open note" + (open.length>1?"s":"") + " — " +
+            open.map(x => x.evaluator).join(", ");
+  return d;
+}
+
+function noteButton(node, onDone){
+  const b = el("button", "notebtn", "✉");
+  b.title = "Send a note about “" + node.name + "” to the administrator";
+  b.addEventListener("click", e => { e.stopPropagation(); noteComposer(node, onDone); });
+  return b;
+}
+
+function noteComposer(node, onDone){
+  const ov = el("div","overlay");
+  const modal = el("div","modal");
+  const head = el("div","mhead");
+  head.appendChild(el("h3", null, "Note to administrator"));
+  const x = el("button","x","×"); head.appendChild(x);
+  modal.appendChild(head);
+
+  const body = el("div","mbody");
+  body.appendChild(el("div","kv", "About: " + pathOf(node)));
+
+  const ta = el("textarea","notearea");
+  ta.placeholder = "What should the administrator know? e.g. “this needs further decomposition — there are at least two ways to assign a driver”";
+  ta.rows = 5;
+  body.appendChild(ta);
+
+  const who = el("div","kv", "From " + (S.evaluator || "unattributed") +
+    " — change this in the Evaluate bar if it's not you.");
+  body.appendChild(who);
+
+  const msg = el("div","smsg");
+  const bar = el("div","pv-bar");
+  const send = el("button","btn","Send");
+  const cancel = el("button","btn ghost","Cancel");
+  bar.appendChild(send); bar.appendChild(cancel);
+  body.appendChild(bar); body.appendChild(msg);
+
+  modal.appendChild(body); ov.appendChild(modal); document.body.appendChild(ov);
+  ta.focus();
+
+  const close = () => { document.removeEventListener("keydown", key); ov.remove(); };
+  const key = e => { if(e.key === "Escape"){ e.preventDefault(); close(); } };
+  document.addEventListener("keydown", key);
+
+  const go = async () => {
+    const text = ta.value.trim();
+    if(!text){ msg.className = "smsg bad"; msg.textContent = "Write something first."; return; }
+    send.disabled = true; cancel.disabled = true; send.textContent = "Sending…";
+    const mine = await ensureMyEvaluator();
+    const row = {
+      project_id: S.projectId, node_id: node.id, body: text,
+      evaluator: S.evaluator || "unattributed",
+      evaluator_id: mine ? mine.id : null
+    };
+    const res = await saveOp(() => api("admin_notes", {
+      method: "POST",
+      headers: { ...H, "Prefer": "return=representation" },
+      body: JSON.stringify(row)
+    }));
+    if(!res){
+      send.disabled = false; cancel.disabled = false; send.textContent = "Send";
+      msg.className = "smsg bad";
+      msg.textContent = "Couldn't send — has 06_admin_notes.sql been run?";
+      return;
+    }
+    S.notes.push((await res.json())[0]);
+    close(); refreshNoteBadge();
+    if(onDone) onDone();
+  };
+  send.addEventListener("click", go);
+  cancel.addEventListener("click", close);
+  x.addEventListener("click", close);
+  // Ctrl/Cmd+Enter sends without reaching for the mouse
+  ta.addEventListener("keydown", e => { if(e.key === "Enter" && (e.ctrlKey || e.metaKey)) go(); });
+}
+
+function pathOf(node){
+  const parts = []; let cur = node;
+  while(cur){ parts.unshift(cur.name); cur = cur.parent_id ? nodeById(cur.parent_id) : null; }
+  return parts.join(" › ");
+}
+
+function openNotesList(){
+  let showResolved = false;
+  const ov = el("div","overlay");
+  const modal = el("div","modal");
+  const head = el("div","mhead");
+  head.appendChild(el("h3", null, "Notes to administrator"));
+  const x = el("button","x","×"); x.addEventListener("click", () => ov.remove()); head.appendChild(x);
+  modal.appendChild(head);
+  const body = el("div","mbody"); modal.appendChild(body);
+
+  const draw = () => {
+    body.innerHTML = "";
+    const all = S.notes.slice().sort((a,b) => (b.created_at||"").localeCompare(a.created_at||""));
+    const open = all.filter(n => n.status === "open");
+    const done = all.filter(n => n.status === "resolved");
+
+    if(!open.length) body.appendChild(el("p", null, "No open notes."));
+
+    const render = (list, resolved) => list.forEach(note => {
+      const node = nodeById(note.node_id);
+      const card = el("div", "notecard" + (resolved ? " done" : ""));
+
+      const top = el("div","notehead");
+      const link = el("button","notelink", node ? pathOf(node) : "(node deleted)");
+      if(node){
+        link.addEventListener("click", () => { ov.remove(); goTo(node.id); });
+      } else { link.disabled = true; }
+      top.appendChild(link);
+      top.appendChild(el("span","notemeta", note.evaluator + " · " + auditWhen(note.created_at)));
+      card.appendChild(top);
+
+      card.appendChild(el("div","notebody", note.body));
+
+      if(!resolved && atLeast("builder")){        // resolving a note is a builder act
+        const slot = el("div","resolveslot");
+        const act = el("button","btn ghost sm","Resolve");
+        act.addEventListener("click", () => {
+          slot.innerHTML = "";
+          const ta = el("textarea","notearea resolvearea");
+          ta.rows = 2;
+          ta.placeholder = "What was done about it? (optional — Enter to resolve)";
+          const row = el("div","pv-bar");
+          const ok = el("button","btn sm","Resolve");
+          const no = el("button","btn ghost sm","Cancel");
+          row.appendChild(ok); row.appendChild(no);
+          slot.appendChild(ta); slot.appendChild(row);
+          ta.focus();
+          no.addEventListener("click", () => { slot.innerHTML = ""; slot.appendChild(act); });
+          const go = async () => {
+            ok.disabled = true; no.disabled = true; ok.textContent = "…";
+            const res = await saveOp(() => api("admin_notes?id=eq." + note.id, {
+              method: "PATCH",
+              headers: { ...H, "Prefer": "return=representation" },
+              body: JSON.stringify({ status: "resolved", resolved_at: new Date().toISOString(),
+                                     resolved_by: S.evaluator || "unattributed",
+                                     resolution: ta.value.trim() || null })
+            }));
+            if(res){
+              const upd = (await res.json())[0];
+              const i = S.notes.findIndex(n => n.id === note.id);
+              if(i >= 0) S.notes[i] = upd;
+              refreshNoteBadge(); draw(); renderTree(); renderRight();
+            } else {
+              ok.disabled = false; no.disabled = false; ok.textContent = "Resolve";
+            }
+          };
+          ok.addEventListener("click", go);
+          ta.addEventListener("keydown", e => {
+            if(e.key === "Escape"){ slot.innerHTML=""; slot.appendChild(act); }
+            if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); go(); }
+          });
+        });
+        slot.appendChild(act);
+        card.appendChild(slot);
+      } else {
+        const foot = el("div","noteres");
+        foot.textContent = note.resolution
+          ? "Resolved by " + (note.resolved_by || "?") + " — " + note.resolution
+          : "Resolved by " + (note.resolved_by || "?") + " — no comment recorded";
+        if(!note.resolution) foot.classList.add("bare");
+        card.appendChild(foot);
+      }
+      body.appendChild(card);
+    });
+
+    render(open, false);
+
+    if(done.length){
+      const t = el("button","btn ghost sm",
+        (showResolved ? "Hide" : "Show") + " " + done.length + " resolved");
+      t.style.marginTop = "14px";
+      t.addEventListener("click", () => { showResolved = !showResolved; draw(); });
+      body.appendChild(t);
+      if(showResolved) render(done, true);
+    }
+  };
+  draw();
+  ov.appendChild(modal); document.body.appendChild(ov);
+  ov.addEventListener("click", e => { if(e.target === ov) ov.remove(); });
+}
+
+/* ---------- SCREENSHOTS / EVIDENCE (S5) ----------
+   Shared project evidence, not per-evaluator: one upload, visible to everyone.
+   Attaches to any node; optionally tagged with the system it depicts (a
+   workflow diagram or whiteboard photo depicts no single system).
+
+   Where things live, and why:
+     ADD  — Build pane only. Attaching is authoring work, and it is rare.
+     VIEW — in place, from the Evaluate matrix. A corner fold on the cell for
+            (node × system), opening a lightbox over the matrix. Viewing must
+            not cost a mode switch: goTo() collapses you into Build, so a round
+            trip loses scroll position, the domain filter and your place.
+     The row's "⛶ add" button is the deliberate mode switch, for the rare case.
+
+   Untagged screenshots have no cell to sit on, so they mark the row name.
+------------------------------------------------------------------------- */
+
+const SHOT_BUCKET = "screenshots";
+const SHOT_MAX_BYTES = 5 * 1024 * 1024;
+
+function shotsFor(nodeId, systemId){
+  return S.shots.filter(x => x.node_id === nodeId &&
+    (systemId === undefined ? true
+     : systemId === null ? !x.system_id
+     : x.system_id === systemId));
+}
+function shotUrl(path){
+  return SUPABASE_URL + "/storage/v1/object/public/" + SHOT_BUCKET + "/" + path;
+}
+
+async function uploadShot(file, node, systemId, caption, msgEl){
+  if(file.size > SHOT_MAX_BYTES){
+    msgEl.className = "smsg bad";
+    msgEl.textContent = "Too big (" + Math.round(file.size/1024/1024) + " MB). Limit is 5 MB.";
+    return null;
+  }
+  const ext = (file.type.split("/")[1] || "png").replace("jpeg","jpg");
+  // no Date.now-free constraint here; this runs in the browser
+  const stamp = new Date().toISOString().replace(/[:.]/g,"-");
+  const path = S.projectId + "/" + node.id + "/" + stamp + "." + ext;
+
+  const res = await saveOp(() => fetch(
+    SUPABASE_URL + "/storage/v1/object/" + SHOT_BUCKET + "/" + path, {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, Authorization: H.Authorization,
+                 "Content-Type": file.type || "image/png", "x-upsert": "false" },
+      body: file
+    }));
+  if(!res){
+    msgEl.className = "smsg bad";
+    const why = lastSaveError || "";
+    msgEl.textContent = /row-level security|Unauthorized|403/i.test(why)
+      ? "Upload blocked by storage security. The bucket needs an INSERT policy — run 08_storage_policies.sql. (" + why.slice(0,120) + ")"
+      : /404|Bucket not found/i.test(why)
+      ? "No “" + SHOT_BUCKET + "” bucket found. Supabase → Storage → New bucket."
+      : "Upload failed: " + (why.slice(0,180) || "unknown error — check the browser console");
+    return null;
+  }
+  const row = await saveOp(() => api("screenshots", {
+    method: "POST",
+    headers: { ...H, "Prefer": "return=representation" },
+    body: JSON.stringify({ project_id: S.projectId, node_id: node.id,
+                           system_id: systemId || null,
+                           storage_path: path, caption: caption || null })
+  }));
+  if(!row){
+    msgEl.className = "smsg bad";
+    msgEl.textContent = "Image uploaded but the record failed to save.";
+    return null;
+  }
+  const created = (await row.json())[0];
+  S.shots.push(created);
+  return created;
+}
+
+// The single live paste handler. Module-level on purpose: it has to outlive
+// the `box` it was created for, so the NEXT render can unregister it.
+let shotPasteHandler = null;
+
+function renderShotBlock(r, n){
+  const box = el("div","block");
+  box.appendChild(el("div","mvttl","Evidence — screenshots for this node"));
+  box.appendChild(el("div","kv",
+    "Shared with everyone on the project, not per-evaluator. Tag the system it "+
+    "shows, or leave it untagged for a diagram or whiteboard photo."));
+
+  const msg = el("div","smsg");
+  const grid = el("div","shotgrid");
+
+  const draw = () => {
+    grid.innerHTML = "";
+    const mine = shotsFor(n.id);
+    if(!mine.length){ grid.appendChild(el("div","kv","None yet.")); return; }
+    mine.forEach(sh => {
+      const card = el("div","shotcard");
+      const img = Object.assign(el("img"), { src: shotUrl(sh.storage_path), loading:"lazy" });
+      img.addEventListener("click", () => shotLightbox(sh, n));
+      card.appendChild(img);
+      const sys = sh.system_id ? (S.systems.find(x=>x.id===sh.system_id)||{}).code : null;
+      card.appendChild(el("div","shotmeta", (sys ? sys + " · " : "") +
+        (sh.caption || "no caption")));
+      if(!atLeast("admin")){ grid.appendChild(card); return; }   // deleting evidence is an administrative act
+      const del = el("button","btn ghost sm","Delete");
+      del.addEventListener("click", async () => {
+        if(!confirm("Delete this screenshot? Evidence deletion is an administrative act.")) return;
+        del.disabled = true;
+        await saveOp(() => fetch(
+          SUPABASE_URL + "/storage/v1/object/" + SHOT_BUCKET + "/" + sh.storage_path,
+          { method:"DELETE", headers:{ apikey:SUPABASE_KEY, Authorization:H.Authorization } }));
+        const ok = await saveOp(() => api("screenshots?id=eq." + sh.id, { method:"DELETE" }));
+        if(ok){ S.shots = S.shots.filter(x => x.id !== sh.id); draw(); renderTree(); }
+        else del.disabled = false;
+      });
+      card.appendChild(del);
+      grid.appendChild(card);
+    });
+  };
+  draw();
+  box.appendChild(grid);
+
+  // ---- add controls ----
+  const bar = el("div","shotadd");
+  const sysSel = el("select");
+  sysSel.appendChild(Object.assign(el("option",null,"— no system (diagram, whiteboard) —"),{value:""}));
+  S.systems.forEach(sy => sysSel.appendChild(Object.assign(el("option",null,sy.name),{value:sy.id})));
+  const cap = Object.assign(el("input"), { placeholder:"Caption (optional)" });
+  const pick = Object.assign(el("input"), { type:"file", accept:"image/*" });
+  const pickBtn = el("button","btn ghost sm","Choose file…");
+  pickBtn.addEventListener("click", () => pick.click());
+  bar.appendChild(sysSel); bar.appendChild(cap); bar.appendChild(pickBtn); bar.appendChild(pick);
+  box.appendChild(bar);
+
+  const zone = el("div","shotzone");
+  zone.tabIndex = 0;
+  zone.textContent = "Click here and press Ctrl+V to paste a screenshot";
+  box.appendChild(zone);
+  box.appendChild(msg);
+
+  const take = async (file) => {
+    if(!file) return;
+    msg.className = "smsg"; msg.textContent = "Uploading…";
+    const created = await uploadShot(file, n, sysSel.value || null, cap.value.trim(), msg);
+    if(created){
+      msg.className = "smsg ok";
+      msg.textContent = "Added.";
+      cap.value = ""; pick.value = "";
+      draw(); renderTree();
+    }
+  };
+  pick.addEventListener("change", () => take(pick.files[0]));
+  const grab = e => {
+    const items = (e.clipboardData || {}).items || [];
+    for(const it of items){
+      if(it.type && it.type.startsWith("image/")){ e.preventDefault(); take(it.getAsFile()); return true; }
+    }
+    return false;
+  };
+  zone.addEventListener("click", () => zone.focus());
+
+  // ⚠ NO `zone.addEventListener("paste", ...)`. There used to be one, and the
+  // event BUBBLES: pasting into the focused zone fired the zone handler and
+  // then the document handler below, uploading the same image twice.
+  // e.preventDefault() does not stop propagation. The document handler alone
+  // covers both cases, because the zone is inside the document.
+  //
+  // ⚠ AND THE OLD HANDLER IS REMOVED FIRST. It used to be stashed on `box`
+  // — which is a NEW element on every render — and never unregistered, so
+  // every node visited left another live listener behind, each closed over
+  // its own stale node. Measured before the fix: one paste after visiting
+  // three nodes produced FOUR uploads, attached to Node Three, Node One,
+  // Node Two and Node Three. Not just duplicates: evidence landing on nodes
+  // the user was not looking at.
+  if(shotPasteHandler) document.removeEventListener("paste", shotPasteHandler);
+  shotPasteHandler = e => {
+    const t = e.target;
+    if(t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+    grab(e);
+  };
+  document.addEventListener("paste", shotPasteHandler);
+
+  r.appendChild(box);
+}
+
+function shotLightbox(sh, node){
+  const ov = el("div","overlay");
+  const modal = el("div","modal shotmodal");
+  const head = el("div","mhead");
+  const sys = sh.system_id ? (S.systems.find(x=>x.id===sh.system_id)||{}).name : null;
+  head.appendChild(el("h3", null, sys ? sys : "Evidence"));
+  const x = el("button","x","×"); head.appendChild(x);
+  modal.appendChild(head);
+  const body = el("div","mbody");
+  body.appendChild(Object.assign(el("img","shotfull"), { src: shotUrl(sh.storage_path) }));
+  if(sh.caption) body.appendChild(el("div","shotcap", sh.caption));
+  body.appendChild(el("div","shotmeta2",
+    (node ? pathOf(node) : "") + " · added " + auditWhen(sh.created_at)));
+  modal.appendChild(body); ov.appendChild(modal); document.body.appendChild(ov);
+
+  const close = () => { document.removeEventListener("keydown", key); ov.remove(); };
+  const key = e => { if(e.key === "Escape"){ e.preventDefault(); close(); } };
+  document.addEventListener("keydown", key);
+  x.addEventListener("click", close);
+  ov.addEventListener("click", e => { if(e.target === ov) close(); });
+}
+
+// corner fold for a matrix cell that has evidence for this node × system
+function shotFold(node, systemId){
+  const list = shotsFor(node.id, systemId);
+  if(!list.length) return null;
+  const f = el("span","shotfold");
+  f.title = list.length + " screenshot" + (list.length>1?"s":"") + " — click to view";
+  f.addEventListener("click", e => { e.stopPropagation(); shotLightbox(list[0], node); });
+  return f;
+}
+
+/* ---------- MODES ---------- */
+function setMode(m){
+  if(m!=="build") flushOrder();   // fire-and-forget: never block a mode switch on the network
+  S.mode=m;
+  document.querySelectorAll(".mode").forEach(b=>b.classList.toggle("active",b.dataset.mode===m));
+  $("lefttitle").textContent = m==="build"?"Structure":(m==="evaluate"?"Evaluate":"Chart");
+  // The left panel is hidden entirely in Evaluate, so the alias toggle only
+  // makes sense in Build and Chart.
+  $("aliasbtn").style.display = (m==="evaluate") ? "none" : "";
+  syncAliasChrome();
+  // Structure-editing controls are builder+. Hidden, not disabled: evaluators
+  // are the largest and least technical group, and a clean screen beats a
+  // screen full of things they can't touch.
+  $("addbar").style.display  = (m==="build" && atLeast("builder"))?"flex":"none";
+  $("rootbar").style.display = (m==="build" && atLeast("builder"))?"flex":"none";
+  document.querySelector(".left").style.display = (m==="evaluate")?"none":"block";
+  renderTree(); renderRight();
+}
+
+/* ---------- LOAD ---------- */
+async function loadProjectData(){
+  // everything scoped to the current project
+  const pid=S.projectId;
+  // scales for this project, then their values (two simple steps, no fancy join)
+  const scRes=await api("scales?select=id&project_id=eq."+pid);
+  const scales=await scRes.json();
+  const scaleIds=scales.map(s=>s.id);
+  let svPromise;
+  if(scaleIds.length){
+    svPromise=api("scale_values?select=*&order=sort_order&scale_id=in.("+scaleIds.join(",")+")");
+  } else {
+    svPromise=Promise.resolve({json:async()=>[]});
+  }
+  // node_rollup is deliberately NOT fetched. Colour comes from each node's own
+  // rating (D9); the view remains in the database, read by nothing.
+  const [n,sy,sv,ev,evl,al,nt,sc,ch]=await Promise.all([
+    api("nodes?select=*&project_id=eq."+pid),
+    api("systems?select=*&project_id=eq."+pid),
+    svPromise,
+    api("evaluations?select=*&project_id=eq."+pid),
+    api("evaluators?select=*&project_id=eq."+pid+"&order=name"),
+    api("aliases?select=*&project_id=eq."+pid),
+    api("admin_notes?select=*&project_id=eq."+pid),
+    api("screenshots?select=*&project_id=eq."+pid),
+    api("channels?select=*&order=sort_order&project_id=eq."+pid)
+  ]);
+  S.nodes=await n.json(); S.systems=await sy.json(); S.scaleValues=await sv.json();
+  S.evals=await ev.json(); S.evaluators=await evl.json();
+  S.aliases=al.ok?await al.json():[];
+  S.notes=nt.ok?await nt.json():[];
+  S.shots=sc.ok?await sc.json():[];   // table may not exist until 06_admin_notes.sql is run
+  S.channels=ch.ok?await ch.json():[];
+  refreshNoteBadge();
+  S.currentSystem = S.systems[0] ? S.systems[0].id : null;
+  // Default to the current system's first channel. Recomputed rather than
+  // remembered across projects — a channel id from another project would
+  // silently match nothing and grey the whole tree.
+  S.currentChannel = (currentChannelFor(S.currentSystem) || {}).id || null;
+  // Identity comes from the session, not from a picker. Re-derived per project
+  // because membership is per-project: the same login can be a different
+  // evaluator row (or none) in a different project.
+  setIdentityFromSession();
+  const sp=$("syspick"); sp.innerHTML="";
+  S.systems.forEach(s=>sp.appendChild(Object.assign(el("option",null,s.name),{value:s.id})));
+  await loadMeaningChanges();
+  $("status").textContent=S.nodes.length+" nodes · "+S.systems.length+" system(s) · "
+    +S.channels.length+" channel(s)";
+}
+
+async function reload(){ await loadProjectData(); renderTree(); renderRight(); }
+
+async function loadProjectList(selectId){
+  const pr=await api("projects?select=*&order=created_at");
+  S.projects=await pr.json();
+  const pp=$("projpick"); pp.innerHTML="";
+  S.projects.forEach(p=>pp.appendChild(Object.assign(el("option",null,p.name),{value:p.id})));
+  // choose which project is active: requested, or last-used, or first
+  let want = selectId || localStorage.getItem("cct_project") || (S.projects[0]&&S.projects[0].id);
+  if(!S.projects.some(p=>p.id===want)) want = S.projects[0] && S.projects[0].id;
+  S.projectId = want;
+  if(want){ pp.value=want; localStorage.setItem("cct_project", want); }
+}
+
+async function switchProject(pid){
+  await flushOrder();          // reload() replaces S.nodes; an unsaved order would vanish
+  S.projectId=pid; S.currentId=null; S.collapsed=new Set(); S.evalDomain="all"; S.coEvaluator=null;
+  $("nodesearch").value=""; closeSearch();
+  localStorage.setItem("cct_project", pid);
+  await reload();
+}
+
+/* ---------- SETTINGS (project config) ---------- */
+function openSettings(){
+  const ov=el("div","overlay");
+  const modal=el("div","modal wide");
+  const head=el("div","mhead");
+  head.appendChild(Object.assign(el("h3",null,"Project Settings"),{}));
+  const x=el("button","x","×"); x.addEventListener("click",()=>ov.remove()); head.appendChild(x);
+  modal.appendChild(head);
+  const body=el("div","mbody"); modal.appendChild(body);
+
+  const tabs=el("div","stab");
+  const tSys=el("button",null,"Systems"); tSys.classList.add("on");
+  const tEval=el("button",null,"Evaluators");
+  const tScale=el("button",null,"Support scale");
+  tabs.appendChild(tSys); tabs.appendChild(tEval); tabs.appendChild(tScale); body.appendChild(tabs);
+  const panel=el("div"); body.appendChild(panel);
+
+  const setOn=b=>{ [tSys,tEval,tScale].forEach(x=>x.classList.remove("on")); b.classList.add("on"); };
+  tSys.addEventListener("click",()=>{ setOn(tSys); renderSystemsPanel(panel); });
+  tEval.addEventListener("click",()=>{ setOn(tEval); renderEvaluatorsPanel(panel); });
+  tScale.addEventListener("click",()=>{ setOn(tScale); renderScalePanel(panel); });
+
+  renderSystemsPanel(panel);
+  ov.appendChild(modal);
+  ov.addEventListener("click",e=>{ if(e.target===ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
+
+function renderSystemsPanel(panel){
+  panel.innerHTML="";
+  panel.appendChild(el("p",null,"Systems you're evaluating against. The 3-character code is used in compact/bulk views."));
+  const tbl=el("table","syslist");
+  const thead=el("tr"); ["Name","Code",""].forEach(h=>thead.appendChild(el("th",null,h))); tbl.appendChild(thead);
+  S.systems.forEach(s=>{
+    const tr=el("tr");
+    const nmTd=el("td"); const nm=Object.assign(el("input"),{value:s.name});
+    nm.addEventListener("change",()=>updateSystem(s,{name:nm.value.trim()},msg));
+    nmTd.appendChild(nm); tr.appendChild(nmTd);
+    const cdTd=el("td"); const cd=Object.assign(el("input","codeinp"),{value:s.code||"",maxLength:3});
+    cd.addEventListener("input",()=>{ cd.value=cd.value.toUpperCase().slice(0,3); });
+    cd.addEventListener("change",()=>updateSystem(s,{code:cd.value.trim().toUpperCase()||null},msg));
+    cdTd.appendChild(cd); tr.appendChild(cdTd);
+    const delTd=el("td"); const del=el("button","del","Delete");
+    del.addEventListener("click",()=>deleteSystem(s,panel,msg));
+    delTd.appendChild(del); tr.appendChild(delTd);
+    tbl.appendChild(tr);
+  });
+  panel.appendChild(tbl);
+
+  const add=el("div","addsys");
+  const nm=Object.assign(el("input","nm"),{placeholder:"New system name"});
+  const cd=Object.assign(el("input","cd"),{placeholder:"COD",maxLength:3});
+  cd.addEventListener("input",()=>{ cd.value=cd.value.toUpperCase().slice(0,3); });
+  const btn=el("button","btn sm","Add system");
+  const msg=el("div","smsg");
+  btn.addEventListener("click",async()=>{
+    const name=nm.value.trim(), code=cd.value.trim().toUpperCase()||null;
+    if(!name){ msg.className="smsg bad"; msg.textContent="Enter a system name."; return; }
+    const res=await saveOp(()=>api("systems",{method:"POST",headers:{...H,"Prefer":"return=representation"},
+      body:JSON.stringify({project_id:S.projectId,name,code})}));
+    if(res){ const created=(await res.json())[0]; S.systems.push(created); nm.value=""; cd.value="";
+      msg.className="smsg ok"; msg.textContent="Added "+name+"."; renderSystemsPanel(panel); refreshSystemPickers(); }
+    else { msg.className="smsg bad"; msg.textContent="Couldn't add — that code may already be used in this project."; }
+  });
+  add.appendChild(nm); add.appendChild(cd); add.appendChild(btn);
+  panel.appendChild(add); panel.appendChild(msg);
+
+  /* ---- B18: channels, per system ---- */
+  panel.appendChild(el("h4","chanh","Channels"));
+  panel.appendChild(el("p","chansub",
+    "A channel is a way a system is reached — who is using it (audience) and how they get to it "
+    + "(surface). Each becomes a column group in Evaluate. "
+    + "A system only lists the channels it actually offers, so a missing one already means "
+    + "“doesn’t exist in that form” — there is no need for a “not applicable” rating."));
+  S.systems.forEach(s=>renderChannelBlock(panel, s, msg));
+}
+
+const AUDIENCE_HINTS = ["Office","Customer","Driver","Partner"];
+const SURFACE_HINTS  = ["Desktop","Web","App","Phone"];
+
+function renderChannelBlock(panel, s, msg){
+  const box=el("div","chanblock");
+  box.appendChild(el("div","chansys", s.name + (s.code?" ("+s.code+")":"")));
+  const list=channelsFor(s.id);
+
+  if(!list.length){
+    // ⚠ Not cosmetic. channel_id is NOT NULL, so a system with no channels
+    // cannot be rated at all — say so here rather than letting the matrix
+    // silently drop its columns.
+    box.appendChild(el("div","smsg bad",
+      "No channels — this system cannot be rated until it has at least one."));
+  }
+
+  const tbl=el("table","syslist");
+  const th=el("tr"); ["Audience","Surface","Short name","Description",""]
+    .forEach(h=>th.appendChild(el("th",null,h)));
+  tbl.appendChild(th);
+
+  list.forEach(c=>{
+    const tr=el("tr");
+    const mk=(val, hints, key, maxLen)=>{
+      const td=el("td");
+      const inp=Object.assign(el("input"),{value:val||""});
+      if(maxLen) inp.maxLength=maxLen;
+      if(hints){
+        const id="dl_"+key+"_"+c.id;
+        inp.setAttribute("list", id);
+        const dl=el("datalist"); dl.id=id;
+        hints.forEach(h=>dl.appendChild(Object.assign(el("option"),{value:h})));
+        td.appendChild(dl);
+      }
+      inp.addEventListener("change",()=>updateChannel(c,{[key]:inp.value.trim()},panel,msg));
+      td.appendChild(inp); return td;
+    };
+    tr.appendChild(mk(c.audience,   AUDIENCE_HINTS, "audience"));
+    tr.appendChild(mk(c.surface,    SURFACE_HINTS,  "surface"));
+    tr.appendChild(mk(c.short_name, null,           "short_name", 8));
+    tr.appendChild(mk(c.description,null,           "description"));
+    const delTd=el("td"); const del=el("button","del","Delete");
+    del.addEventListener("click",()=>deleteChannel(c,s,panel,msg));
+    delTd.appendChild(del); tr.appendChild(delTd);
+    tbl.appendChild(tr);
+  });
+  box.appendChild(tbl);
+
+  const addRow=el("div","addsys");
+  const aud=Object.assign(el("input","nm"),{placeholder:"Audience (Office, Customer, Driver…)"});
+  const srf=Object.assign(el("input","nm"),{placeholder:"Surface (Desktop, Web, App…)"});
+  const shn=Object.assign(el("input","cd"),{placeholder:"Short",maxLength:8});
+  const b=el("button","btn sm","Add channel");
+  b.addEventListener("click",async()=>{
+    const audience=aud.value.trim(), surface=srf.value.trim();
+    if(!audience || !surface){
+      msg.className="smsg bad"; msg.textContent="A channel needs both an audience and a surface."; return;
+    }
+    const short_name=(shn.value.trim() || audience).slice(0,8);
+    const res=await saveOp(()=>api("channels",{method:"POST",
+      headers:{...H,"Prefer":"return=representation"},
+      body:JSON.stringify({ project_id:s.project_id, system_id:s.id, audience, surface, short_name,
+                            sort_order:(list.length?Math.max(...list.map(x=>x.sort_order||0)):0)+1 })}));
+    if(res){
+      S.channels.push((await res.json())[0]);
+      msg.className="smsg ok"; msg.textContent="Added "+audience+" · "+surface+" to "+s.name+".";
+      renderSystemsPanel(panel); refreshSystemPickers();
+    } else {
+      msg.className="smsg bad";
+      msg.textContent="Couldn’t add — "+(lastSaveError||"that audience and surface pair may already exist on this system.");
+    }
+  });
+  addRow.appendChild(aud); addRow.appendChild(srf); addRow.appendChild(shn); addRow.appendChild(b);
+  box.appendChild(addRow);
+  panel.appendChild(box);
+}
+
+async function updateChannel(c, patch, panel, msg){
+  const res=await saveOp(()=>api("channels?id=eq."+c.id,
+    {method:"PATCH",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify(patch)}));
+  if(res){ Object.assign(c,(await res.json())[0]);
+    if(msg){ msg.className="smsg ok"; msg.textContent="Saved."; }
+    refreshSystemPickers();
+  } else if(msg){
+    msg.className="smsg bad";
+    msg.textContent="Couldn’t save — "+(lastSaveError||"that audience and surface pair may already exist on this system.");
+  }
+}
+
+async function deleteChannel(c, s, panel, msg){
+  // ⚠ evaluations.channel_id cascades. Count first and say the number out loud
+  // — "its evaluations will be removed too" is not the same warning as "this
+  // deletes 41 ratings".
+  const n = S.evals.filter(e=>e.channel_id===c.id).length;
+  const warn = "Delete channel “"+channelLabel(c)+"” from "+s.name+"?"
+    + (n ? "\n\n⚠ This also deletes "+n+" rating"+(n>1?"s":"")+" recorded against it. "
+           + "That cannot be undone from here." : "\n\nIt has no ratings.");
+  if(!confirm(warn)) return;
+  const res=await saveOp(()=>api("channels?id=eq."+c.id,{method:"DELETE"}));
+  if(res){
+    S.channels=S.channels.filter(x=>x.id!==c.id);
+    S.evals=S.evals.filter(e=>e.channel_id!==c.id);
+    if(S.currentChannel===c.id) S.currentChannel=null;
+    renderSystemsPanel(panel); refreshSystemPickers();
+  } else if(msg){
+    msg.className="smsg bad"; msg.textContent="Couldn’t delete — "+(lastSaveError||"refused.");
+  }
+}
+
+async function updateSystem(s,patch,msg){
+  const res=await saveOp(()=>api("systems?id=eq."+s.id,{method:"PATCH",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify(patch)}));
+  if(res){ Object.assign(s,(await res.json())[0]); refreshSystemPickers(); if(msg){msg.className="smsg ok"; msg.textContent="Saved.";} }
+  else if(msg){ msg.className="smsg bad"; msg.textContent="Couldn't save — that code may already be in use."; }
+}
+async function deleteSystem(s,panel,msg){
+  if(!confirm("Delete system “"+s.name+"”? Its evaluations will be removed too."))return;
+  const res=await saveOp(()=>api("systems?id=eq."+s.id,{method:"DELETE"}));
+  if(res){ S.systems=S.systems.filter(x=>x.id!==s.id); renderSystemsPanel(panel); refreshSystemPickers(); }
+  else if(msg){ msg.className="smsg bad"; msg.textContent="Couldn't delete."; }
+}
+function refreshSystemPickers(){
+  const sp=$("syspick"); const cur=sp.value; sp.innerHTML="";
+  S.systems.forEach(s=>sp.appendChild(Object.assign(el("option",null,s.name+(s.code?" ("+s.code+")":"")),{value:s.id})));
+  if(S.systems.some(s=>s.id===cur)) sp.value=cur; else if(S.systems[0]){ sp.value=S.systems[0].id; S.currentSystem=S.systems[0].id; }
+  $("status").textContent=S.nodes.length+" nodes · "+S.systems.length+" system(s) · "
+    +S.channels.length+" channel(s)";
+  if(S.mode!=="build") renderTree();
+  renderRight();
+}
+
+function renderEvaluatorsPanel(panel){
+  panel.innerHTML="";
+  panel.appendChild(el("p",null,
+    "Who may evaluate in this project. Each row should be linked to a login \u2014 "+
+    "an unlinked row is inert: nobody can ever sign in as it."));
+
+  const tbl=el("table","syslist");
+  const thead=el("tr"); ["Name","Login","Assigned system"].forEach(h=>thead.appendChild(el("th",null,h)));
+  tbl.appendChild(thead);
+
+  const msg=el("div","smsg");
+
+  S.evaluators.forEach(ev=>{
+    const tr=el("tr");
+
+    // Name is now READ-ONLY here. Renaming an evaluator orphans every rating
+    // they made, because the app still matches ratings on the name text. Until
+    // reads move to evaluator_id, this field is a loaded gun.
+    const nmTd=el("td"); nmTd.appendChild(el("span",null,ev.name));
+    if(myEvaluatorFor() && myEvaluatorFor().id===ev.id){
+      const you=el("span","mini"); you.textContent="you"; you.style.marginLeft="6px";
+      nmTd.appendChild(you);
+    }
+    tr.appendChild(nmTd);
+
+    // Linked or not. This is the distinction that matters under RLS: a row with
+    // no user_id cannot be signed in as, and cannot own a rating.
+    const linkTd=el("td");
+    if(ev.user_id){
+      const ok=el("span","mini leaf","linked");
+      ok.title="Linked to a login. This person can sign in and rate.";
+      linkTd.appendChild(ok);
+    } else {
+      const no=el("span","mini hold","no login");
+      no.title="Not linked to any account \u2014 inert. Link it in cct-admin.html.";
+      linkTd.appendChild(no);
+    }
+    tr.appendChild(linkTd);
+
+    // The assigned system stays editable: it is a working decision a facilitator
+    // makes mid-session, and it restricts nothing \u2014 it only outlines their
+    // column in the matrix.
+    const sysTd=el("td"); const sysSel=el("select");
+    sysSel.appendChild(Object.assign(el("option",null,"\u2014 none \u2014"),{value:""}));
+    S.systems.forEach(s=>sysSel.appendChild(Object.assign(el("option",null,s.name),{value:s.id})));
+    sysSel.value=ev.default_system_id||"";
+    sysSel.title="A usability hint \u2014 their column is outlined in the matrix. It does not gate access.";
+    sysSel.addEventListener("change",()=>updateEvaluator(ev,{default_system_id:sysSel.value||null},msg));
+    sysTd.appendChild(sysSel); tr.appendChild(sysTd);
+
+    tbl.appendChild(tr);
+  });
+  panel.appendChild(tbl);
+
+  // Adding and removing people is deliberately NOT here.
+  //
+  // To add someone you must choose WHICH LOGIN they are, and auth.users is not
+  // exposed to this API \u2014 only the cct-admin Edge Function can list accounts.
+  // The old "Add evaluator" box created name-only rows with no user_id: inert,
+  // indistinguishable from real membership in this list, and exactly how "Chip"
+  // and "Seebo" became two people for the same human. Divergence D8.
+  const hint=el("div","kv"); hint.style.marginTop="12px";
+  hint.innerHTML = "<b>Adding or removing people happens in <code>cct-admin.html</code></b>, "+
+    "the local administration app \u2014 because linking a person to a login needs the "+
+    "account list, which only the server can see. Names are set there too: renaming "+
+    "someone here would orphan every rating they have made.";
+  panel.appendChild(hint);
+  panel.appendChild(msg);
+}
+async function updateEvaluator(ev,patch,msg){
+  const res=await saveOp(()=>api("evaluators?id=eq."+ev.id,{method:"PATCH",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify(patch)}));
+  if(res){ Object.assign(ev,(await res.json())[0]); if(msg){msg.className="smsg ok"; msg.textContent="Saved.";} }
+  else if(msg){ msg.className="smsg bad"; msg.textContent="Couldn't save."; }
+}
+// No longer reachable from the UI \u2014 removing a membership happens in
+// cct-admin.html, where the consequence (their ratings become unowned) can be
+// spelled out against a named account. Kept so nothing else breaks.
+async function deleteEvaluator(ev,panel){
+  if(!confirm("Remove evaluator “"+ev.name+"”? (Their existing ratings stay.)"))return;
+  const res=await saveOp(()=>api("evaluators?id=eq."+ev.id,{method:"DELETE"}));
+  if(res){ S.evaluators=S.evaluators.filter(x=>x.id!==ev.id); renderEvaluatorsPanel(panel); }
+}
+
+function renderScalePanel(panel){
+  panel.innerHTML="";
+  // The lock: once any rating exists, the scale's meaning is load-bearing.
+  // Renaming, reordering or deleting a value would silently rewrite what past
+  // judgments say. Adding stays allowed — additive change can't invalidate an
+  // existing rating, the same reasoning that lets nodes be added after a
+  // branch is marked evaluation-ready.
+  const locked = S.evals.length > 0;
+  const scaleId = S.scaleValues[0] ? S.scaleValues[0].scale_id : null;
+
+  if(locked){
+    const note=el("div","msg ok");
+    note.style.display="block";
+    note.textContent="Locked — "+S.evals.length+" rating"+(S.evals.length>1?"s":"")+
+      " already use this scale. Colors can still be changed and new values added; "+
+      "renaming and reordering are blocked because they would silently change what past ratings mean. "+
+      "A value no rating uses can still be deleted — it has nothing to orphan.";
+    panel.appendChild(note);
+  } else {
+    panel.appendChild(el("p",null,"No ratings exist yet, so the scale is fully editable. Once the first rating is saved it locks: colors and additions stay open, edits to existing values do not."));
+  }
+  panel.appendChild(el("p",null,"Order runs best → worst. That order defines the roll-up: a parent scores as its weakest essential descendant."));
+
+  const msg=el("div","smsg");
+  const tbl=el("table","syslist");
+  const thead=el("tr"); ["","Label","Color",""].forEach(h=>thead.appendChild(el("th",null,h))); tbl.appendChild(thead);
+
+  S.scaleValues.forEach((v,i)=>{
+    const tr=el("tr");
+
+    // reorder
+    const ordTd=el("td");
+    if(!locked){
+      const up=el("button","btn ghost sm","↑"); up.disabled = i===0;
+      const dn=el("button","btn ghost sm","↓"); dn.disabled = i===S.scaleValues.length-1;
+      up.addEventListener("click",()=>swapScale(i,i-1,panel));
+      dn.addEventListener("click",()=>swapScale(i,i+1,panel));
+      dn.style.marginLeft="4px";
+      ordTd.appendChild(up); ordTd.appendChild(dn);
+    } else {
+      ordTd.appendChild(el("span","kv",String(i+1)));
+    }
+    tr.appendChild(ordTd);
+
+    // how many ratings actually reference this value — decides whether deleting
+    // it can hurt anything
+    const uses=S.evals.filter(e=>e.scale_value_id===v.id).length;
+
+    // label
+    const labTd=el("td");
+    if(locked){
+      labTd.appendChild(el("span",null,v.label));
+      const u=el("span","kv", uses ? "  "+uses+" rating"+(uses>1?"s":"") : "  unused");
+      u.style.marginLeft="8px"; if(!uses) u.style.color="var(--muted)";
+      labTd.appendChild(u);
+    }
+    else{
+      const inp=Object.assign(el("input"),{value:v.label});
+      inp.style.width="180px";
+      inp.addEventListener("change",()=>updateScaleValue(v,{label:inp.value.trim()||v.label},msg,panel));
+      labTd.appendChild(inp);
+    }
+    tr.appendChild(labTd);
+
+    // color — editable even when locked; a color carries no meaning a rating depends on
+    const colTd=el("td");
+    const col=Object.assign(el("input"),{type:"color",value:v.color||"#cccccc"});
+    col.style.cssText="width:44px;height:28px;padding:2px;";
+    col.addEventListener("change",()=>updateScaleValue(v,{color:col.value},msg,panel));
+    colTd.appendChild(col);
+    tr.appendChild(colTd);
+
+    // delete
+    const delTd=el("td");
+    // The lock exists to stop ratings being orphaned or re-meant. A value that
+    // NO rating uses can do neither, so deleting it stays safe even when locked.
+    if(!locked || uses===0){
+      const d=el("button","btn ghost sm","Delete");
+      if(locked) d.title="Safe to delete — no rating uses this value";
+      d.addEventListener("click",async()=>{
+        if(!confirm("Delete the “"+v.label+"” value from the scale?")) return;
+        const res=await saveOp(()=>api("scale_values?id=eq."+v.id,{method:"DELETE"}));
+        if(res){ S.scaleValues=S.scaleValues.filter(x=>x.id!==v.id); renderScalePanel(panel); }
+      });
+      delTd.appendChild(d);
+    }
+    tr.appendChild(delTd);
+    tbl.appendChild(tr);
+  });
+  panel.appendChild(tbl);
+  panel.appendChild(msg);
+
+  // add — allowed even when locked
+  if(scaleId){
+    const add=el("div","addbar"); add.style.marginTop="12px";
+    const nm=Object.assign(el("input"),{placeholder:"New value label (added as worst)"});
+    const cl=Object.assign(el("input"),{type:"color",value:"#cccccc"});
+    cl.style.cssText="width:44px;height:34px;padding:2px;";
+    const btn=el("button","btn sm","Add value");
+    const doAdd=async()=>{
+      const label=nm.value.trim(); if(!label) return;
+      const maxOrder=S.scaleValues.reduce((m,v)=>Math.max(m,v.sort_order||0),0);
+      const res=await saveOp(()=>api("scale_values",{method:"POST",headers:{...H,"Prefer":"return=representation"},
+        body:JSON.stringify({scale_id:scaleId,label,color:cl.value,sort_order:maxOrder+1})}));
+      if(res){ S.scaleValues.push((await res.json())[0]); nm.value=""; renderScalePanel(panel); }
+      else { msg.className="smsg bad"; msg.textContent="Couldn't add — a value with that label may already exist."; }
+    };
+    btn.addEventListener("click",doAdd);
+    nm.addEventListener("keydown",e=>{ if(e.key==="Enter") doAdd(); });
+    add.appendChild(nm); add.appendChild(cl); add.appendChild(btn);
+    panel.appendChild(add);
+    if(locked) panel.appendChild(el("div","kv","A new value is added as the worst option. Evaluators who rated earlier never saw it, so consider whether earlier ratings deserve a second look."));
+  } else {
+    panel.appendChild(el("div","kv","No support scale exists for this project yet."));
+  }
+}
+
+async function updateScaleValue(v,patch,msg,panel){
+  const res=await saveOp(()=>api("scale_values?id=eq."+v.id,{method:"PATCH",headers:{...H,"Prefer":"return=representation"},
+    body:JSON.stringify(patch)}));
+  if(res){
+    Object.assign(v,(await res.json())[0]);
+    msg.className="smsg ok"; msg.textContent="Saved.";
+    renderTree(); renderRight();       // colors and labels show up everywhere
+  } else { msg.className="smsg bad"; msg.textContent="Couldn't save — that label may already be in use."; }
+}
+
+// Swap two values' sort_order. Order is the roll-up's definition of "worse",
+// so this is only reachable before any rating exists.
+async function swapScale(i,j,panel){
+  const a=S.scaleValues[i], b=S.scaleValues[j];
+  const ao=a.sort_order, bo=b.sort_order;
+  // Prefer: return=representation is not decoration — without it PostgREST
+  // answers 204, and a refused write looks exactly like a successful one.
+  const r1=await saveOp(()=>api("scale_values?id=eq."+a.id,{method:"PATCH",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify({sort_order:bo})}));
+  if(!r1) return;
+  const r2=await saveOp(()=>api("scale_values?id=eq."+b.id,{method:"PATCH",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify({sort_order:ao})}));
+  if(!r2) return;
+  a.sort_order=bo; b.sort_order=ao;
+  S.scaleValues.sort((x,y)=>x.sort_order-y.sort_order);
+  renderScalePanel(panel);
+}
+
+/* ---------- TYPE-AHEAD NODE SEARCH ---------- */
+let searchHits=[], searchIdx=-1;
+function escHtml(s){ return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function closeSearch(){ $("searchresults").classList.remove("open"); searchHits=[]; searchIdx=-1; }
+function runSearch(){
+  const q=$("nodesearch").value.trim().toLowerCase();
+  const box=$("searchresults");
+  if(!q){ closeSearch(); return; }
+  // whole-word-ish starts rank above mid-word matches; then shallower nodes first
+  searchHits=S.nodes
+    .map(n=>({n,i:n.name.toLowerCase().indexOf(q)}))
+    .filter(h=>h.i>=0)
+    .sort((a,b)=> (a.i-b.i) || a.n.name.length-b.n.name.length || a.n.name.localeCompare(b.n.name))
+    .slice(0,12);
+  box.innerHTML="";
+  if(!searchHits.length){
+    box.appendChild(el("div","snone","No node matches “"+$("nodesearch").value.trim()+"”"));
+    box.classList.add("open"); searchIdx=-1; return;
+  }
+  searchHits.forEach((h,idx)=>{
+    const row=el("div","sres");
+    const nm=el("span","sname");
+    const raw=h.n.name;
+    nm.innerHTML=escHtml(raw.slice(0,h.i))+"<mark>"+escHtml(raw.substr(h.i,q.length))+"</mark>"+escHtml(raw.slice(h.i+q.length));
+    row.appendChild(nm);
+    const parent=nodeById(h.n.parent_id);
+    row.appendChild(el("span","spath", parent?pathOf(parent):"top level"));
+    row.addEventListener("mouseenter",()=>{ searchIdx=idx; paintSearch(); });
+    row.addEventListener("click",()=>chooseHit(idx));
+    box.appendChild(row);
+  });
+  searchIdx=0; paintSearch();
+  box.classList.add("open");
+}
+function paintSearch(){
+  [...$("searchresults").children].forEach((c,i)=>c.classList.toggle("active",i===searchIdx));
+}
+function chooseHit(idx){
+  const h=searchHits[idx]; if(!h) return;
+  $("nodesearch").value=""; closeSearch();
+  goTo(h.n.id);
+}
+$("nodesearch").addEventListener("input",runSearch);
+$("nodesearch").addEventListener("keydown",e=>{
+  if(e.key==="ArrowDown"||e.key==="ArrowUp"){
+    if(!searchHits.length) return;
+    e.preventDefault();
+    searchIdx=(searchIdx+(e.key==="ArrowDown"?1:-1)+searchHits.length)%searchHits.length;
+    paintSearch();
+    $("searchresults").children[searchIdx].scrollIntoView({block:"nearest"});
+  } else if(e.key==="Enter"){ e.preventDefault(); chooseHit(searchIdx); }
+  else if(e.key==="Escape"){ $("nodesearch").value=""; closeSearch(); $("nodesearch").blur(); }
+});
+document.addEventListener("click",e=>{ if(!e.target.closest(".searchwrap")) closeSearch(); });
+// "/" focuses search from anywhere you're not already typing
+document.addEventListener("keydown",e=>{
+  if(e.key!=="/"||e.metaKey||e.ctrlKey) return;
+  const t=e.target.tagName;
+  if(t==="INPUT"||t==="TEXTAREA"||t==="SELECT") return;
+  if(S.mode!=="build") return;
+  e.preventDefault(); $("nodesearch").focus();
+});
+
+/* ---------- EVALUATION READINESS & STALE RATINGS ----------
+   The original design froze a subtree and blocked meaning-changing edits. With
+   the audit log recording every change, that enforcement is heavier than it
+   needs to be: `evaluation_ready` is now a SIGNAL ("this branch is settled,
+   start rating"), edits are warned about rather than blocked, and any rating
+   they undermine is flagged stale automatically. Staleness is computed from
+   the log, never stored.                                                     */
+// ⚠ PARKED 2026-08-30 by Seebo's decision, not deleted. Flip to true to revive.
+//
+// The idea: editing a node's name, problem_solved or parent changes what a
+// rating MEANT, so ratings made before that edit get flagged "stale" for
+// review. It works, and it is off because the concept needs rethinking rather
+// than because it is broken -- so it is one line to bring back.
+//
+// `details` is deliberately NOT in this list. Seebo: details do not change
+// meaning. It describes how something works; it does not redefine what "Full
+// support" would mean, which is problem_solved's job.
+//
+// While false: no stale flags, no "N stale ratings" button, and no
+// meaning-changed confirmation when editing a node. Nothing is lost -- the
+// audit log still records every edit, so turning this back on recomputes the
+// whole history from scratch.
+const MEANING_TRACKING = false;
+const MEANING_FIELDS=["name","problem_solved","parent_id"];   // not is_essential/is_evaluable:
+                                                              // those change roll-up, not meaning
+async function loadMeaningChanges(){
+  S.meaningChanges={};
+  if(!MEANING_TRACKING) return;   // parked; staleFor() and allStale() then find nothing
+  try{
+    const r=await api("audit_log?table_name=eq.nodes&action=eq.UPDATE&project_id=eq."+S.projectId+
+                      "&select=row_id,changed_at,old_row,new_row&order=changed_at.desc&limit=2000");
+    if(!r.ok) return;                       // audit_log not installed yet — degrade quietly
+    const rows=await r.json();
+    rows.forEach(e=>{                        // ordered newest first, so first hit per node wins
+      const fields=MEANING_FIELDS.filter(f=>
+        JSON.stringify((e.old_row||{})[f])!==JSON.stringify((e.new_row||{})[f]));
+      if(!fields.length) return;
+      if(!S.meaningChanges[e.row_id]) S.meaningChanges[e.row_id]={ at:e.changed_at, fields };
+    });
+  }catch{ /* connection pill already reports the failure */ }
+}
+// A rating is stale when its node's meaning moved after the rating was last touched.
+function staleFor(ev){
+  const mc=S.meaningChanges[ev.node_id]; if(!mc) return null;
+  const rated=ev.updated_at||ev.created_at; if(!rated) return null;
+  return new Date(mc.at) > new Date(rated) ? mc : null;
+}
+function allStale(){
+  return S.evals.map(e=>({e,mc:staleFor(e)})).filter(x=>x.mc);
+}
+// evaluation_ready is stored on a subtree root; descendants inherit by walking up
+// Everything is ready by default. What inherits is the HOLD: the nearest
+// ancestor (or the node itself) that has been deliberately unchecked.
+function holdRoot(n){ if(!n.evaluation_ready) return n; return ancestorsOf(n.id).find(a=>!a.evaluation_ready)||null; }
+function isHeld(n){ return !!holdRoot(n); }
+// How many ratings ride on this node and everything under it — the number that
+// makes "are you sure" a real question rather than a reflex.
+function ratingsUnder(id){
+  const ids=descendantIds(id);
+  return S.evals.filter(e=>ids.has(e.node_id)).length;
+}
+
+/* ---------- NODE HISTORY (audit_log, backlog #13) ----------
+   Two queries: the node's own row history, plus rating history for that node
+   (evaluations reference it via node_id inside the JSONB payload). Merged into
+   one timeline, because "what changed here" means both.                      */
+const AUDIT_HIDE=new Set(["id","project_id","created_at","top_domain_id","proposal_id"]);
+const FIELD_LABEL={ name:"Name", problem_solved:"Problem solved", parent_id:"Parent",
+  is_evaluable:"Evaluable", is_essential:"Essential", evaluation_ready:"Evaluation-ready",
+  kind:"Kind", details:"Details", sort_order:"Position",
+  scale_value_id:"Rating", evaluator:"Evaluator", co_evaluator:"Co-evaluator",
+  note:"Note", system_id:"System" };
+
+function auditValue(field,v){
+  if(v===null||v===undefined||v==="") return "—";
+  if(field==="parent_id"){ const p=nodeById(v); return p?p.name:"(removed node)"; }
+  if(field==="scale_value_id"){ const sv=svById(v); return sv?sv.label:"(removed value)"; }
+  if(field==="system_id"){ const s=S.systems.find(x=>x.id===v); return s?(s.code||s.name):"(removed system)"; }
+  if(v===true) return "yes"; if(v===false) return "no";
+  return String(v);
+}
+function auditWhen(ts){
+  const d=new Date(ts);
+  return d.toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+}
+function auditDiff(e){
+  const out=[];
+  const keys=new Set([...Object.keys(e.old_row||{}),...Object.keys(e.new_row||{})]);
+  keys.forEach(k=>{
+    if(AUDIT_HIDE.has(k)) return;
+    const a=(e.old_row||{})[k], b=(e.new_row||{})[k];
+    if(JSON.stringify(a)===JSON.stringify(b)) return;
+    out.push({ field:FIELD_LABEL[k]||k, from:auditValue(k,a), to:auditValue(k,b) });
+  });
+  return out;
+}
+
+async function openHistory(n){
+  const ov=el("div","overlay");
+  const modal=el("div","modal");
+  const head=el("div","mhead");
+  head.appendChild(el("h3",null,"History — "+n.name));
+  const x=el("button","x","×"); x.addEventListener("click",()=>ov.remove()); head.appendChild(x);
+  modal.appendChild(head);
+  const body=el("div","mbody"); modal.appendChild(body);
+  body.appendChild(el("div","kv","Loading…"));
+  ov.appendChild(modal);
+  ov.addEventListener("click",e=>{ if(e.target===ov) ov.remove(); });
+  document.body.appendChild(ov);
+
+  let rows=[];
+  try{
+    const [own,rat]=await Promise.all([
+      api("audit_log?row_id=eq."+n.id+"&order=changed_at.desc&limit=200"),
+      api("audit_log?table_name=eq.evaluations&or=(new_row->>node_id.eq."+n.id+",old_row->>node_id.eq."+n.id+")&order=changed_at.desc&limit=200")
+    ]);
+    if(!own.ok) throw new Error(await own.text());
+    rows=[...await own.json(), ...(rat.ok?await rat.json():[])]
+         .sort((a,b)=> new Date(b.changed_at)-new Date(a.changed_at));
+  }catch(err){
+    body.innerHTML="";
+    body.appendChild(el("div","msg bad","Couldn't load history: "+err+
+      "\n\nIf audit_log doesn't exist yet, run 02_audit_log.sql in Supabase."));
+    return;
+  }
+
+  body.innerHTML="";
+  if(!rows.length){
+    body.appendChild(el("div","kv","No recorded changes. History starts from when the audit triggers were installed — anything before that wasn't captured."));
+    return;
+  }
+  rows.forEach(e=>{
+    const item=el("div","hitem");
+    const top=el("div","hhead");
+    const what = e.table_name==="evaluations" ? "Rating" : "Node";
+    const verb = e.action==="INSERT"?"created" : e.action==="DELETE"?"deleted" : "changed";
+    top.appendChild(el("span","hact"+(e.action==="DELETE"?" bad":""), what+" "+verb));
+    top.appendChild(el("span","hwhen",auditWhen(e.changed_at)));
+    top.appendChild(el("span","hwho", e.actor || "unattributed"));
+    item.appendChild(top);
+
+    if(e.action==="UPDATE"){
+      const diffs=auditDiff(e);
+      diffs.forEach(d=>{
+        const row=el("div","hdiff");
+        row.appendChild(el("span","hfield",d.field));
+        row.appendChild(el("span","hold",d.from));
+        row.appendChild(el("span","harrow","→"));
+        row.appendChild(el("span","hnew",d.to));
+        item.appendChild(row);
+      });
+      if(!diffs.length) item.appendChild(el("div","kv","(no visible field changes)"));
+    } else {
+      const snap=e.new_row||e.old_row||{};
+      const bits=Object.keys(snap).filter(k=>!AUDIT_HIDE.has(k) && snap[k]!==null && snap[k]!=="")
+        .map(k=>(FIELD_LABEL[k]||k)+": "+auditValue(k,snap[k]));
+      item.appendChild(el("div","hsnap",bits.join("  ·  ")));
+    }
+    body.appendChild(item);
+  });
+
+  const foot=el("div","kv");
+  foot.style.marginTop="14px";
+  foot.textContent="Attribution is blank until authentication exists — the log records what and when reliably, but not yet who.";
+  body.appendChild(foot);
+}
+
+/* ---------- STALE RATINGS REPORT ---------- */
+function openStaleReport(){
+  const ov=el("div","overlay");
+  const modal=el("div","modal");
+  const head=el("div","mhead");
+  head.appendChild(el("h3",null,"Ratings needing review"));
+  const x=el("button","x","×"); x.addEventListener("click",()=>ov.remove()); head.appendChild(x);
+  modal.appendChild(head);
+  const body=el("div","mbody"); modal.appendChild(body);
+
+  const rows=allStale().sort((a,b)=> new Date(b.mc.at)-new Date(a.mc.at));
+  body.appendChild(el("p",null,"These ratings were made before their node last changed meaning. Nothing is wrong with them automatically — they just haven't been checked since the node moved under them."));
+
+  const tbl=el("table","syslist");
+  const th=el("tr"); ["Node","System","Evaluator","Rating","Changed","When"].forEach(h=>th.appendChild(el("th",null,h))); tbl.appendChild(th);
+  rows.forEach(({e,mc})=>{
+    const n=nodeById(e.node_id); if(!n) return;
+    const sys=S.systems.find(s=>s.id===e.system_id);
+    const sv=svById(e.scale_value_id);
+    const tr=el("tr");
+    const nameTd=el("td");
+    const link=el("button","btn ghost sm",n.name);
+    link.addEventListener("click",()=>{ ov.remove(); goTo(n.id); });
+    nameTd.appendChild(link); tr.appendChild(nameTd);
+    tr.appendChild(el("td",null,sys?(sys.code||sys.name):"—"));
+    tr.appendChild(el("td",null,e.evaluator||"—"));
+    tr.appendChild(el("td",null,sv?sv.label:"—"));
+    tr.appendChild(el("td",null,mc.fields.map(f=>FIELD_LABEL[f]||f).join(", ")));
+    tr.appendChild(el("td",null,auditWhen(mc.at)));
+    tbl.appendChild(tr);
+  });
+  body.appendChild(tbl);
+  body.appendChild(el("div","kv","Re-rating clears the flag: staleness compares the node's last meaning change against when the rating was last touched."));
+
+  ov.appendChild(modal);
+  ov.addEventListener("click",e=>{ if(e.target===ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
+
+async function boot(){
+  // Auth first, so every request below carries the token if there is one.
+  loadSession();
+  await ensureFreshSession();
+  renderWhoAmI();
+
+  // No session: the login box is the app. Not dismissible — signed-out stopped
+  // being a usable state at step 2b, which is what makes the gating testable
+  // before RLS is switched on.
+  if(!SESSION){ showLogin(null,{dismissible:false}); return; }
+
+  await loadRole();
+  renderWhoAmI();
+  applyRoleToChrome();   // before the no-role branch: an account with no role must not see admin chrome either
+
+  // Signed in but no profile row: fail closed. Deliberately does not load the
+  // project — RLS is off, so nothing else would stop this account seeing data.
+  if(!S.role){
+    setConn("ok"); $("status").textContent="No role assigned";
+    document.querySelector(".left").style.display="none";   // nothing loaded, nothing to add to
+    document.querySelectorAll(".mode").forEach(b=>b.style.display="none");
+    const box=el("div","empty");
+    box.appendChild(el("div",null,"Your account has no role yet."));
+    box.appendChild(el("div","kv","An administrator has to grant one before you can see or change anything. "+
+      "Signed in as "+((SESSION.user||{}).email||"")+"."));
+    $("right").appendChild(box);
+    return;
+  }
+
+  try{
+    await loadProjectList();
+    if(!S.projectId){
+      // no projects at all — offer to make one
+      setConn("ok"); $("status").textContent="No projects yet";
+      $("right").appendChild(el("div","empty","No projects yet. Click “+ Project” to create one."));
+      return;
+    }
+    await loadProjectData();
+    setConn("ok");
+    $("projpick").addEventListener("change",e=>switchProject(e.target.value));
+    $("syspick").addEventListener("change",()=>{
+      S.currentSystem=$("syspick").value;
+      // Channels belong to a system, so the remembered one is meaningless
+      // after a switch. Re-derive rather than carry a dangling id.
+      S.currentChannel=(currentChannelFor(S.currentSystem)||{}).id||null;
+      renderTree(); renderRight();
+    });
+    $("aliasbtn").addEventListener("click",()=>{
+      if(!S.aliasMode && !S.systems.length){
+        flashNav("No systems yet — aliases are a system's own word for a node. Add systems in ⚙ Settings first.");
+        return;
+      }
+      S.aliasMode = !S.aliasMode;
+      syncAliasChrome();
+      renderTree();
+    });
+    setMode("build");
+  }catch(err){
+    setConn("bad", isNetworkError(err) ? "Offline" : "DB error");
+    $("status").textContent="Load failed";
+    $("right").appendChild(el("div","msg bad",String(err)));
+  }
+}
+
+document.querySelectorAll(".mode").forEach(b=>b.addEventListener("click",()=>setMode(b.dataset.mode)));
+$("retrybtn").addEventListener("click",async()=>{ if(lastFailedOp){ const op=lastFailedOp; await saveOp(op); } });
+$("settingsbtn").addEventListener("click",openSettings);
+$("notesbtn").addEventListener("click",openNotesList);
+$("quickaddbtn").addEventListener("click",quickAdd);
+$("quickadd").addEventListener("keydown",e=>{ if(e.key==="Enter")quickAdd(); });
+$("quickadd").addEventListener("paste",e=>{
+  handleMultiPaste(e, nodeById(S.currentId), created=>{
+    $("quickadd").value="";
+    renderTree(); renderRight(); $("quickadd").focus();
+    flashNav("Added "+created.length+" children"+(S.currentId?" under "+nodeById(S.currentId).name:"")+".");
+  });
+});
+
+$("newprojbtn").addEventListener("click",async()=>{
+  const name=prompt("Name of the new project:");
+  if(!name||!name.trim())return;
+  let copyFromId=null;
+  if(S.projects.length){
+    const copy=confirm("Copy the systems and support scale from your current project?\n\nOK = copy config from “"+
+      (S.projects.find(p=>p.id===S.projectId)||{}).name+"”\nCancel = start blank");
+    if(copy) copyFromId=S.projectId;
+  }
+  try{
+    // 1. create the project
+    const pRes=await api("projects",{method:"POST",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify({name:name.trim()})});
+    if(!pRes.ok) throw new Error(await pRes.text());
+    const newProj=(await pRes.json())[0];
+
+    if(copyFromId){
+      // 2a. copy systems
+      const sysRes=await api("systems?select=name,code&project_id=eq."+copyFromId);
+      const sys=await sysRes.json();
+      if(sys.length){
+        await api("systems",{method:"POST",headers:H,body:JSON.stringify(sys.map(s=>({project_id:newProj.id,name:s.name,code:s.code})))});
+      }
+      // 2b. copy the support scale + its values
+      const scRes=await api("scales?select=*&project_id=eq."+copyFromId);
+      const scales=await scRes.json();
+      for(const sc of scales){
+        const newScRes=await api("scales",{method:"POST",headers:{...H,"Prefer":"return=representation"},
+          body:JSON.stringify({project_id:newProj.id,name:sc.name,kind:sc.kind})});
+        const newSc=(await newScRes.json())[0];
+        const vRes=await api("scale_values?select=label,color,sort_order&scale_id=eq."+sc.id);
+        const vals=await vRes.json();
+        if(vals.length){
+          await api("scale_values",{method:"POST",headers:H,
+            body:JSON.stringify(vals.map(v=>({scale_id:newSc.id,label:v.label,color:v.color,sort_order:v.sort_order})))});
+        }
+      }
+    }
+    // 3. switch to the new project
+    await loadProjectList(newProj.id);
+    await switchProject(newProj.id);
+  }catch(err){ alert("Could not create project: "+err); }
+});
+
+$("newrootbtn").addEventListener("click",async()=>{
+  const name=prompt("Name of the new top-level domain:");
+  if(!name||!name.trim())return;
+  // A top-level domain is always a capability. Never a choice.
+  const body={ project_id:S.projectId, parent_id:null, name:name.trim(), kind:KIND_CAP,
+               is_evaluable:true, is_essential:true, sort_order:nextSortOrder(null) };
+  const res=await api("nodes",{method:"POST",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify(body)});
+  if(res.ok){ const created=(await res.json())[0]; S.nodes.push(created); S.currentId=created.id; renderTree(); renderRight(); }
+  else alert("Could not create domain: "+(await res.text()));
+});
+boot();
+</script>
+</body>
+</html>

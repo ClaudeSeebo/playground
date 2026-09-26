@@ -1,0 +1,1664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>Todonut</title>
+<style>
+  :root{
+    --bg:#f7f2ea; --card:#fffdfa; --ink:#2c2520; --muted:#8d8177;
+    --line:#e8ded0; --accent:#e0762d; --accent-soft:#fdefe2;
+    --pink:#e8869b; --done:#9aa88f; --danger:#c0492f; --ok:#4f7040;
+    --shadow:0 1px 2px rgba(60,40,20,.06),0 4px 14px rgba(60,40,20,.05);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Roboto,sans-serif;
+       background:var(--bg);color:var(--ink);font-size:16px;line-height:1.5;
+       padding:0 0 92px;overflow-x:hidden;}
+  .wrap{max-width:720px;margin:0 auto;padding:0 14px;}
+
+  header{background:linear-gradient(180deg,#fffdfa,#fdf8f1);border-bottom:1px solid var(--line);
+         padding:16px 0 13px;padding-top:max(16px,env(safe-area-inset-top));}
+  .brandrow{display:flex;align-items:center;gap:11px;}
+  .logo{width:32px;height:32px;flex:0 0 32px;}
+  h1{font-size:24px;margin:0;letter-spacing:-.4px;font-weight:700;}
+  .sync{margin-left:auto;font-size:12.5px;color:var(--muted);text-align:right;
+        display:flex;align-items:center;gap:6px;}
+  .dot{width:8px;height:8px;border-radius:50%;background:#c9bfae;flex:0 0 8px;}
+  .dot.ok{background:#7fae6a;} .dot.busy{background:var(--accent);animation:p 1s infinite;}
+  .dot.err{background:var(--danger);}
+  @keyframes p{50%{opacity:.3}}
+
+  .banner{display:none;margin:11px 0 0;padding:11px 13px;border-radius:11px;
+          font-size:13.8px;line-height:1.45;border:1px solid;}
+  .banner.show{display:block;}
+  #errBanner{background:#fdeee9;border-color:#f0c4b5;color:#8f2d18;}
+  #anonBanner{background:#fff8e8;border-color:#f0dcae;color:#7a5c14;}
+  .banner b{font-weight:700;}
+  .banner button{font:inherit;font-size:13px;font-weight:600;margin-top:7px;
+                 background:#fff;border:1px solid currentColor;color:inherit;
+                 border-radius:9px;padding:6px 11px;cursor:pointer;}
+
+  .newcat{display:flex;gap:8px;margin:14px 0 4px;}
+  input[type=text],input[type=email],textarea{
+    font:inherit;font-size:16px;padding:11px 13px;border:1px solid var(--line);
+    border-radius:11px;background:var(--card);color:var(--ink);width:100%;
+    outline:none;transition:border-color .15s,box-shadow .15s;min-width:0;}
+  input:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(224,118,45,.13);}
+  input::placeholder,textarea::placeholder{color:#b6a99c;}
+  button{font:inherit;cursor:pointer;border:none;border-radius:11px;transition:filter .15s;}
+  button:active{filter:brightness(.94);}
+  button:disabled{opacity:.5;cursor:default;}
+  .btn-primary{background:var(--accent);color:#fff;font-weight:600;padding:11px 17px;white-space:nowrap;}
+  .btn-ghost{background:transparent;color:var(--muted);padding:7px 10px;font-size:13px;border:1px solid var(--line);}
+
+  .cat{background:var(--card);border:1px solid var(--line);border-radius:15px;
+       box-shadow:var(--shadow);margin:11px 0;overflow:hidden;}
+  .cathead{display:flex;align-items:center;gap:10px;padding:13px 15px;cursor:pointer;
+           user-select:none;-webkit-user-select:none;}
+  .chev{flex:0 0 15px;width:15px;color:var(--muted);font-size:12px;text-align:center;
+        transition:transform .18s;transform:rotate(-90deg);}
+  .cat.open .chev{transform:rotate(0);}
+  .catname{font-weight:650;font-size:17px;flex:1 1 auto;overflow-wrap:anywhere;min-width:0;}
+  .pill{flex:0 0 auto;font-size:12px;font-weight:600;color:var(--muted);
+        background:#f4ede3;border-radius:20px;padding:3px 10px;white-space:nowrap;}
+  .pill.allDone{background:#e8f0e2;color:var(--ok);}
+  .catbody{display:none;border-top:1px solid var(--line);padding:4px 15px 13px;}
+  .cat.open .catbody{display:block;}
+
+  ul{list-style:none;margin:0;padding:0;}
+  li.item{display:flex;gap:11px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #f2ebe1;}
+  li.item:last-child{border-bottom:none;}
+  li.pending{opacity:.45;}
+  .box{flex:0 0 24px;width:24px;height:24px;margin-top:1px;border-radius:8px;
+       border:2px solid #d8cbbb;background:#fff;cursor:pointer;padding:0;
+       display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;line-height:1;}
+  .box:hover{border-color:var(--accent);}
+  li.done .box{background:var(--done);border-color:var(--done);}
+  /* --- long entries wrap into readable rows (P2) --- */
+  .txt{flex:1 1 auto;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere;
+       word-break:break-word;hyphens:auto;font-size:16px;line-height:1.5;padding-top:1px;}
+  li.done .txt{color:var(--muted);text-decoration:line-through;text-decoration-color:#c9bfae;}
+  .del{flex:0 0 auto;background:none;color:#c9bcae;font-size:17px;line-height:1;
+       padding:3px 6px;border-radius:8px;align-self:flex-start;}
+  .del:hover{color:var(--danger);background:#fbeee9;}
+  .del.confirm{color:#fff;background:var(--danger);font-size:12.5px;font-weight:600;padding:5px 9px;}
+
+  .additem{display:flex;gap:8px;margin-top:11px;}
+  .additem input{font-size:15px;padding:10px 12px;}
+  .additem button{background:var(--accent-soft);color:#a6541b;font-weight:600;padding:10px 14px;white-space:nowrap;}
+  .catfoot{display:flex;gap:8px;margin-top:11px;}
+  .catfoot .spacer{flex:1 1 auto;}
+  .empty{color:var(--muted);font-size:14.5px;font-style:italic;padding:9px 0 2px;}
+  .nothing{text-align:center;color:var(--muted);padding:46px 20px;font-size:15px;}
+  .nothing .big{font-size:40px;display:block;margin-bottom:10px;}
+  .nothing button{margin-top:14px;}
+
+  .bar{position:fixed;left:0;right:0;bottom:0;z-index:60;background:rgba(255,253,250,.95);
+       backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:9px 14px;
+       padding-bottom:max(9px,env(safe-area-inset-bottom));}
+  .bar .inner{max-width:720px;margin:0 auto;display:flex;gap:8px;align-items:center;}
+  .bar .spacer{flex:1 1 auto;}
+  .bar button{background:#efe7db;color:#6d6157;font-weight:600;padding:10px 13px;white-space:nowrap;font-size:14.5px;}
+  .bar button.hi{background:var(--accent);color:#fff;}
+
+  dialog{border:none;border-radius:16px;padding:0;max-width:560px;width:calc(100% - 28px);
+         box-shadow:0 10px 50px rgba(50,30,10,.28);background:var(--card);color:var(--ink);}
+  dialog::backdrop{background:rgba(44,37,32,.45);}
+  .dlg{padding:20px;}
+  .dlg h2{margin:0 0 6px;font-size:19px;}
+  .dlg p{margin:0 0 13px;font-size:14px;color:var(--muted);line-height:1.5;}
+  .dlg textarea{min-height:150px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13.5px;resize:vertical;}
+  .dlgfoot{display:flex;gap:8px;margin-top:13px;align-items:center;}
+  .dlgfoot .spacer{flex:1 1 auto;}
+  .preview{background:#f4ede3;border-radius:9px;padding:10px 12px;margin-top:11px;
+           font-size:13.5px;max-height:170px;overflow:auto;display:none;}
+  .preview.show{display:block;}
+  .preview b{color:var(--ink);}
+  .filerow{margin-top:11px;font-size:14px;}
+
+  .sect{display:flex;align-items:center;gap:8px;margin:14px 0 2px;}
+  .sect:first-of-type{margin-top:6px;}
+  .sectname{font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+            color:#a08a6e;white-space:nowrap;}
+  .sectrule{flex:1 1 auto;height:1px;background:var(--line);}
+  .sectn{font-size:11.5px;color:var(--muted);font-weight:600;}
+
+  .pri{flex:0 0 auto;width:20px;height:20px;margin-top:3px;border-radius:6px;
+       font-size:11.5px;font-weight:800;display:flex;align-items:center;justify-content:center;
+       border:1px solid transparent;background:#f2ece3;color:#a99c8d;padding:0;}
+  .pri.p1{background:#c0492f;color:#fff;} .pri.p2{background:#e0762d;color:#fff;}
+  .pri.p3{background:#e8c04a;color:#5a4410;} .pri.p4{background:#9fb98c;color:#2c3a22;}
+  .pri.p5{background:#e6ded2;color:#8d8177;}
+  .pri.unset{background:transparent;border:1px dashed #d8cbbb;color:#c4b7a7;font-weight:600;}
+  .pri:hover{filter:brightness(1.06);border-color:var(--accent);}
+
+  li.arch{opacity:.55;}
+  li.arch .txt{font-style:italic;}
+  .archbar{display:flex;align-items:center;gap:8px;margin:12px 0 0;padding:8px 11px;
+           background:#f4ede3;border-radius:10px;font-size:13px;color:var(--muted);}
+  .archbar button{background:#fff;border:1px solid var(--line);color:#6d6157;
+                  font-size:12.5px;font-weight:600;padding:5px 10px;}
+  .unarch{flex:0 0 auto;background:none;color:#9aa88f;font-size:14px;padding:3px 6px;
+          border-radius:8px;align-self:flex-start;}
+  .unarch:hover{color:var(--ok);background:#eaf1e4;}
+
+  .cat.selecting li.item{cursor:pointer;padding-left:2px;}
+  .cat.selecting .mv,.cat.selecting .del{display:none;}
+  .sbox{flex:0 0 22px;width:22px;height:22px;margin-top:2px;border-radius:50%;
+        border:2px solid #d8cbbb;background:#fff;display:flex;align-items:center;
+        justify-content:center;font-size:12px;color:#fff;line-height:1;}
+  li.picked .sbox{background:var(--accent);border-color:var(--accent);}
+  li.picked{background:#fdf6ee;border-radius:8px;}
+  .selbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;
+          background:var(--accent-soft);border:1px solid #f6d3b2;border-radius:11px;
+          padding:9px 11px;margin:2px 0 10px;}
+  .selbar .n{font-weight:700;color:#a6541b;font-size:14px;margin-right:auto;}
+  .selbar button{font-size:13.5px;font-weight:600;padding:7px 11px;
+                 background:#fff;border:1px solid #e8ded0;color:#6d6157;}
+  .selbar button.go{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .selbar button.dg{color:var(--danger);}
+  .tgt.newlist{background:#e8f0e2;color:#3f5d33;}
+  .tgt.newlist:hover{background:#dceace;}
+  .mv{flex:0 0 auto;background:none;color:#c9bcae;font-size:15px;line-height:1;
+      padding:3px 6px;border-radius:8px;align-self:flex-start;}
+  .mv:hover{color:var(--accent);background:var(--accent-soft);}
+  li.item.dragging{opacity:.4;}
+  .cat.droptarget{border-color:var(--accent);box-shadow:0 0 0 3px rgba(224,118,45,.18);}
+  .cat.droptarget .cathead{background:var(--accent-soft);}
+  .tgt{display:block;width:100%;text-align:left;background:#f4ede3;color:var(--ink);
+       font-weight:600;font-size:15px;padding:11px 13px;border-radius:10px;margin-bottom:7px;}
+  .tgt:hover{background:var(--accent-soft);color:#a6541b;}
+  .tgt span{float:right;color:var(--muted);font-weight:500;font-size:13px;}
+  .movehint{font-size:12.5px;color:#a2968a;margin-top:4px;}
+
+  #gate{position:fixed;inset:0;z-index:200;background:var(--bg);
+        display:none;align-items:flex-start;justify-content:center;
+        padding:8vh 16px 20px;overflow:auto;}
+  #gate.show{display:flex;}
+  .gatecard{background:var(--card);border:1px solid var(--line);border-radius:18px;
+            box-shadow:var(--shadow);padding:26px 24px;max-width:400px;width:100%;}
+  .glogo{width:44px;height:44px;display:block;margin:0 auto 12px;}
+  .gatecard h2{font-size:21px;margin:0 0 5px;text-align:center;}
+  .gatecard>p{font-size:14px;color:var(--muted);text-align:center;margin:0 0 18px;line-height:1.5;}
+  .gatecard input{margin-bottom:9px;}
+  .gswap{font-size:14px;text-align:center;margin:14px 0 0!important;}
+  .gswap a{color:var(--accent);font-weight:600;text-decoration:none;}
+  .gfoot{font-size:12.5px!important;color:#a2968a!important;margin:14px 0 0!important;
+         line-height:1.45;text-align:center;}
+  body.locked{overflow:hidden;}
+
+  .acct{background:#efe7db;color:#6d6157;font-weight:700;font-size:12px;
+        border-radius:20px;padding:4px 10px;max-width:150px;overflow:hidden;
+        text-overflow:ellipsis;white-space:nowrap;}
+  .acct.anon{background:#fdefe2;color:#a6541b;}
+  .acct.real{background:#e8f0e2;color:#4f7040;}
+  .pane{border-top:1px solid var(--line);padding-top:14px;margin-top:14px;}
+  .pane:first-child{border-top:none;padding-top:0;margin-top:0;}
+  .dlg h3{font-size:15px;margin:0 0 5px;}
+  .dlg input{margin-bottom:8px;}
+  button.full{width:100%;}
+  .warn{background:#fff8e8;border:1px solid #f0dcae;color:#7a5c14;border-radius:10px;
+        padding:10px 12px;font-size:13.5px;margin:0 0 10px;line-height:1.45;}
+  @media (max-width:430px){ h1{font-size:21px;} .bar button{padding:10px 11px;font-size:14px;} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="brandrow">
+      <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+        <circle cx="32" cy="32" r="27" fill="#e8869b"/>
+        <path d="M8 34c4 5 9-3 13 1s3 7 8 7 6-8 11-6 5 5 9 3 6-6 7-9a27 27 0 0 1-48 4z" fill="#d96c85"/>
+        <circle cx="32" cy="32" r="9.5" fill="#f7f2ea"/>
+        <circle cx="21" cy="20" r="2.2" fill="#f4d94e"/><circle cx="44" cy="24" r="2.2" fill="#7ec8e3"/>
+        <circle cx="47" cy="40" r="2.2" fill="#f4d94e"/><circle cx="24" cy="46" r="2.2" fill="#8fd18a"/>
+        <circle cx="36" cy="48" r="2.2" fill="#7ec8e3"/><circle cx="16" cy="33" r="2.2" fill="#8fd18a"/>
+      </svg>
+      <h1>Todonut</h1>
+      <div class="sync">
+        <button id="acctBtn" class="acct" title="Account">?</button>
+        <span class="dot" id="dot"></span><span id="syncTxt">starting…</span>
+      </div>
+    </div>
+
+    <div id="errBanner" class="banner"></div>
+    <div id="anonBanner" class="banner">
+      <b>This account exists only in this browser.</b> There's no email or password on it —
+      if this browser's storage is cleared, your lists stay in the database owned by an
+      identity nothing can sign in as again. Not recoverable, by you or by Supabase.
+      <button id="claimBtn">Set up a real login →</button>
+      <button id="exportNow">Download a backup now</button>
+    </div>
+
+    <div class="newcat">
+      <input type="text" id="newCatInput" placeholder="New list — groceries, movies, grievances…" autocomplete="off">
+      <button class="btn-primary" id="addCatBtn">Add list</button>
+    </div>
+  </div>
+</header>
+
+<div id="gate">
+  <div class="gatecard">
+    <svg class="glogo" viewBox="0 0 64 64" aria-hidden="true">
+      <circle cx="32" cy="32" r="27" fill="#e8869b"/>
+      <path d="M8 34c4 5 9-3 13 1s3 7 8 7 6-8 11-6 5 5 9 3 6-6 7-9a27 27 0 0 1-48 4z" fill="#d96c85"/>
+      <circle cx="32" cy="32" r="9.5" fill="#f7f2ea"/>
+      <circle cx="21" cy="20" r="2.2" fill="#f4d94e"/><circle cx="44" cy="24" r="2.2" fill="#7ec8e3"/>
+      <circle cx="47" cy="40" r="2.2" fill="#f4d94e"/><circle cx="24" cy="46" r="2.2" fill="#8fd18a"/>
+    </svg>
+    <h2 id="gateTitle">Sign in to Todonut</h2>
+    <p id="gateSub">Your lists live in your account, not in this file.</p>
+
+    <div id="legacyPane" class="warn" style="display:none"></div>
+
+    <input type="email" id="gEmail" placeholder="you@example.com" autocomplete="email">
+    <input type="password" id="gPass" placeholder="password" autocomplete="current-password">
+    <input type="password" id="gPass2" placeholder="confirm password" autocomplete="new-password" style="display:none">
+    <button class="btn-primary full" id="gGo">Sign in</button>
+    <div class="preview" id="gMsg"></div>
+    <p class="gswap">
+      <span id="gSwapTxt">No account yet?</span>
+      <a href="#" id="gSwap">Create one</a>
+    </p>
+    <p class="gfoot" id="gFoot">Forgot your password? Reset it from the Supabase
+       dashboard under Authentication → Users.</p>
+  </div>
+</div>
+
+<main class="wrap" id="cats"></main>
+
+<div class="bar">
+  <div class="inner">
+    <span class="spacer"></span>
+    <button id="refreshBtn">Refresh</button>
+    <button id="importBtn">Import</button>
+    <button id="exportBtn" class="hi">Backup</button>
+  </div>
+</div>
+
+<dialog id="importDlg"><div class="dlg">
+  <h2>Import lists</h2>
+  <p>Paste an export from your old todo app — a title line, then one <code>-</code> item per line —
+     or drop in a Todonut backup file. Multiple files at once is fine.</p>
+  <textarea id="importText" placeholder="Groceries:
+- milk
+- eggs
+- the seeded sourdough if they have it"></textarea>
+  <div class="filerow"><input type="file" id="importFile" accept=".txt,.json,text/plain,application/json" multiple></div>
+  <div class="preview" id="importPreview"></div>
+  <div class="dlgfoot">
+    <span class="spacer"></span>
+    <button class="btn-ghost" id="importCancel">Cancel</button>
+    <button class="btn-primary" id="importGo" disabled>Import</button>
+  </div>
+</div></dialog>
+
+<dialog id="priDlg"><div class="dlg">
+  <h2>Priority</h2>
+  <p id="priWhat"></p>
+  <div id="priChoices"></div>
+  <div class="dlgfoot"><span class="spacer"></span>
+    <button class="btn-ghost" id="priCancel">Cancel</button></div>
+</div></dialog>
+
+<dialog id="sectDlg"><div class="dlg">
+  <h2>Section</h2>
+  <p id="sectWhat"></p>
+  <div id="sectChoices"></div>
+  <input type="text" id="sectNew" placeholder="or type a new section name" autocomplete="off">
+  <div class="dlgfoot"><span class="spacer"></span>
+    <button class="btn-ghost" id="sectCancel">Cancel</button>
+    <button class="btn-primary" id="sectGo">Use this name</button></div>
+</div></dialog>
+
+<dialog id="moveDlg"><div class="dlg">
+  <h2>Move to another list</h2>
+  <p id="moveWhat"></p>
+  <div id="moveTargets"></div>
+  <div class="dlgfoot"><span class="spacer"></span>
+    <button class="btn-ghost" id="moveCancel">Cancel</button></div>
+</div></dialog>
+
+<dialog id="acctDlg"><div class="dlg">
+  <h2 id="acctTitle">Account</h2>
+  <p id="acctWho"></p>
+
+  <div id="anonPane">
+    <div class="pane">
+      <h3>Claim this account</h3>
+      <p>Keeps <b id="claimCount"></b> — same account, same lists, just a way back in.
+         Do this on the device that <i>has</i> your lists.</p>
+      <input type="email" id="claimEmail" placeholder="you@example.com" autocomplete="email">
+      <input type="password" id="claimPass" placeholder="a password (8+ characters)" autocomplete="new-password">
+      <button class="btn-primary full" id="claimGo">Claim it</button>
+    </div>
+    <div class="pane">
+      <h3>Or sign in to an account you already have</h3>
+      <div id="orphanWarn" class="warn"></div>
+      <input type="email" id="siEmail" placeholder="you@example.com" autocomplete="email">
+      <input type="password" id="siPass" placeholder="password" autocomplete="current-password">
+      <button class="btn-primary full" id="siGo">Sign in</button>
+    </div>
+  </div>
+
+  <div id="realPane" style="display:none">
+    <div class="pane">
+      <p id="confirmNote" class="warn" style="display:none"></p>
+      <button class="btn-ghost full" id="signOutBtn">Sign out</button>
+      <p style="margin-top:9px;font-size:13px">Signing out on this device does not
+         delete anything. Sign back in to get your lists.</p>
+    </div>
+  </div>
+
+  <div class="preview" id="acctMsg"></div>
+  <div class="dlgfoot"><span class="spacer"></span>
+    <button class="btn-ghost" id="acctClose">Close</button></div>
+</div></dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script id="seed-data" type="application/json">[
+ {
+  "name": "Ai Story Ideas",
+  "items": [
+   {
+    "text": "AI - mankind is/are your parent"
+   },
+   {
+    "text": "Informercial - a toaster built into your pants"
+   },
+   {
+    "text": "The boringness of golf announcers."
+   },
+   {
+    "text": "Annoying ai assistant knows just what you need"
+   },
+   {
+    "text": "Richard Scarry"
+   }
+  ]
+ },
+ {
+  "name": "App Idea",
+  "items": [
+   {
+    "text": "Sales game"
+   },
+   {
+    "text": "Deadman switch admin access"
+   },
+   {
+    "text": "Feature/prototyoe/requirements app"
+   },
+   {
+    "text": "GW proposal app"
+   },
+   {
+    "text": "Family video - memory of the other person"
+   },
+   {
+    "text": "Maze game (match pattern - adjacent squares)"
+   },
+   {
+    "text": "Sc proposal app"
+   },
+   {
+    "text": "Networking app"
+   },
+   {
+    "text": "Adult board game"
+   },
+   {
+    "text": "Interactive story app"
+   },
+   {
+    "text": "Board game (open ended) dice, spaces, cards"
+   },
+   {
+    "text": "Photo with voiceover"
+   }
+  ]
+ },
+ {
+  "name": "Big Plan",
+  "items": [
+   {
+    "text": "We know/think there is a feature gap, we don’t have the data"
+   },
+   {
+    "text": "Purchase approach - features, collections of features, connectivity, support"
+   },
+   {
+    "text": "Reduce uncertsinty"
+   },
+   {
+    "text": "A feature gap is not just the absence of a festure"
+   },
+   {
+    "text": "Risk of forced migrations - then vs now"
+   }
+  ]
+ },
+ {
+  "name": "Business Network",
+  "items": [
+   {
+    "text": "Volunteer wing"
+   },
+   {
+    "text": "Participation options for all schedules"
+   },
+   {
+    "text": "Video interview for networkers"
+   },
+   {
+    "text": "How to we prevent network spammers"
+   },
+   {
+    "text": "How do I deal with overlap"
+   },
+   {
+    "text": "How do I ensure participation"
+   },
+   {
+    "text": "Restaurant lunch hosting option"
+   },
+   {
+    "text": "How do I validate the trustworthiness of a stranger I am introduced to"
+   },
+   {
+    "text": "Can I trust the company I am referring?"
+   }
+  ]
+ },
+ {
+  "name": "CC network app",
+  "items": [
+   {
+    "text": "Introvert/Extrovert setting"
+   },
+   {
+    "text": "Introductions (required?)"
+   }
+  ]
+ },
+ {
+  "name": "Claude",
+  "items": [
+   {
+    "text": "Todo list"
+   },
+   {
+    "text": "Clever gps animation with direction of travel"
+   },
+   {
+    "text": "Missile command radiating circle"
+   },
+   {
+    "text": "Claude MD files"
+   },
+   {
+    "text": "Step 3 - Outline the evaluation criteria you will use to ensure a high quality product."
+   },
+   {
+    "text": "Step 2 - make me verify key decisions"
+   },
+   {
+    "text": "Step 1 - interview me"
+   }
+  ]
+ },
+ {
+  "name": "CCT",
+  "items": [
+   {
+    "text": "Need a way to suggest security control of this particular feature"
+   },
+   {
+    "text": "Need to be sure I can do independent heirarchies and connect later"
+   },
+   {
+    "text": "Need a way to associate a consumer of a particukar feature - res agent, dispatcher, driver"
+   },
+   {
+    "text": "Santacruz - Dashboard for automated reports"
+   },
+   {
+    "text": "Santacruz needs a dashboard"
+   },
+   {
+    "text": "Settings location (module/menu/sub menu)"
+   },
+   {
+    "text": "Teachable moment - how we design interfaces is not always in sync with system taconomy - controls can be placed with system for ease of access - think “remember this setting”"
+   },
+   {
+    "text": "Automation levels, process controls and rules"
+   },
+   {
+    "text": "Need a place for entering in house terms/names of feature"
+   },
+   {
+    "text": "When looking at a particular business requirement, one lens to look through is the essential features/advanced/custom lens"
+   },
+   {
+    "text": "Usability vs calability"
+   }
+  ]
+ },
+ {
+  "name": "Family Sharing App",
+  "items": [
+   {
+    "text": "Funny quotes"
+   },
+   {
+    "text": "Linked memories / shared memory"
+   },
+   {
+    "text": "Memory timeline"
+   },
+   {
+    "text": "Names, birthdays, relationships"
+   },
+   {
+    "text": "Invite individuals"
+   },
+   {
+    "text": "Family admin"
+   },
+   {
+    "text": "Multi family capable"
+   }
+  ]
+ },
+ {
+  "name": "Image Game",
+  "items": [
+   {
+    "text": "Animals"
+   },
+   {
+    "text": "Inappropriate"
+   },
+   {
+    "text": "Biblical"
+   }
+  ]
+ },
+ {
+  "name": "Videl Ideas",
+  "items": [
+   {
+    "text": "Tad - thaddeus"
+   },
+   {
+    "text": "Free potato"
+   },
+   {
+    "text": "Life, from being a single cell through adulthood. - from the perspective of the individual"
+   },
+   {
+    "text": "Doorbell rings, looking through the peephole, door opens"
+   },
+   {
+    "text": "Criminal investigation - cheesy"
+   },
+   {
+    "text": "House flooding with water"
+   },
+   {
+    "text": "Disaster, meteors falling, hiding in a cabe"
+   },
+   {
+    "text": "QR code - husband and wife training"
+   },
+   {
+    "text": "Man who is the slow peanut eating champion.  Can slow suck a peanut into nothingness without a bite in 2 hours and 12 minutes - a full hour better than the next best. Internal mouth cameras to prevent  cheating"
+   },
+   {
+    "text": "Kitten rosary"
+   },
+   {
+    "text": "Don’t subscribe that"
+   },
+   {
+    "text": "Man in curtain running across street"
+   },
+   {
+    "text": "Nothing but cliffhangers"
+   },
+   {
+    "text": "Daddy john bear stories"
+   },
+   {
+    "text": "Criminals of the world"
+   },
+   {
+    "text": "The rosary"
+   },
+   {
+    "text": "Dads protecting daughters"
+   },
+   {
+    "text": "Man running through woods, kettle drum"
+   },
+   {
+    "text": "Prison escape story"
+   },
+   {
+    "text": "Security guard - I’m the guard. I guard stuff."
+   },
+   {
+    "text": "Richard scarry stuff"
+   },
+   {
+    "text": "Amazing helicopter with crazy capabilities"
+   },
+   {
+    "text": "Spooky camp for kids"
+   }
+  ]
+ }
+]</script>
+<script>
+(function(){
+"use strict";
+
+var SUPABASE_URL = 'https://sgjhnwrornugobzpqzii.supabase.co';
+var SUPABASE_KEY = 'sb_publishable_xmew25JUZnTip4LWtZ9ULg_x8Go9bXY';
+
+/* ---------------- state ---------------- */
+var sb=null, USER=null, LISTS=[], openSet={}, busy=0, DRAG=null;
+var selMode={}, picked={}, showArch={};
+
+var $=function(id){return document.getElementById(id);};
+var elCats=$('cats'), elDot=$('dot'), elSync=$('syncTxt'), elErr=$('errBanner'), elAnon=$('anonBanner');
+
+/* ---------------- status ---------------- */
+function setSync(state,msg){
+  elDot.className='dot'+(state?' '+state:'');
+  elSync.textContent=msg;
+}
+function showErr(e,what){
+  var msg = !e ? '' : (e.message||String(e));
+  if(e && e.code) msg='['+e.code+'] '+msg;
+  elErr.innerHTML='<b>'+(what||'Something failed')+'.</b> '+esc(msg)+
+    '<br><button id="errRetry">Reload from server</button>';
+  elErr.classList.add('show');
+  var b=$('errRetry'); if(b) b.addEventListener('click',function(){ clearErr(); loadAll(); });
+  setSync('err','error');
+  console.error(what,e);
+}
+function clearErr(){ elErr.classList.remove('show'); }
+function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':s; return d.innerHTML; }
+
+/* A paused Supabase project is indistinguishable from being offline: the hostname
+   stops resolving and every call fails as a generic fetch error. Say that plainly
+   instead of handing over the library's wording and letting the user blame their
+   wifi. Added 2026-09-19 after exactly that cost an evening. */
+function offlineMsg(e){
+  var m = String((e && (e.message || e.name)) || e || '');
+  var net = /failed to fetch|networkerror|network error|load failed|fetch failed|name_not_resolved|AuthRetryableFetchError/i.test(m)
+         || (e && e.name === 'AuthRetryableFetchError')
+         || (e && (e.status === 0 || e.status === 503 || e.status === 521 || e.status === 522 || e.status === 523));
+  if(!net) return null;
+  var ref = String(typeof SUPABASE_URL === 'string' ? SUPABASE_URL : '').replace(/^https?:\/\//,'').split('.')[0];
+  var link = ref ? '<a href="https://supabase.com/dashboard/project/' + esc(ref) + '" target="_blank" rel="noopener">the project dashboard</a>'
+                 : 'the Supabase dashboard';
+  return '<b>Todonut cannot reach its database.</b><br>' +
+    'Two things look identical from here: you are offline, or the Supabase project is paused. ' +
+    'Free projects pause after about a week unused, and the hostname stops resolving when they do — ' +
+    'which is why this reads as a network error.<br><br>' +
+    'If your connection is fine, open ' + link + ', press <b>Restore</b>, then wait about three minutes. ' +
+    'The database wakes before sign-in does, so try again once rather than repeatedly.';
+}
+
+function work(p,label){
+  busy++; setSync('busy',label||'saving…');
+  return p.then(function(r){
+    busy--;
+    if(busy===0){ clearErr(); setSync('ok','synced'); }  /* a real success clears a stale error */
+    return r;
+  },function(e){ busy--; throw e; });
+}
+
+/* ---------------- gate + boot ---------------- */
+/* No silent identity. Todonut never creates an account you did not ask for —
+   the app stays behind this gate until a real sign-in succeeds. An existing
+   ANONYMOUS session from an older build is honoured rather than stranded,
+   with a banner telling you what it is. */
+var GATE_MODE='signin';   /* 'signin' | 'signup' */
+
+function showGate(msg){
+  $('gate').classList.add('show');
+  document.body.classList.add('locked');
+  if(msg) gmsg(msg,true);
+}
+function hideGate(){
+  $('gate').classList.remove('show');
+  document.body.classList.remove('locked');
+}
+function gmsg(t,bad){
+  var m=$('gMsg');
+  if(!t){ m.className='preview'; m.innerHTML=''; return; }
+  m.innerHTML=t; m.className='preview show'; m.style.color = bad?'#8f2d18':'';
+}
+function setGateMode(mode){
+  GATE_MODE=mode;
+  var up = mode==='signup';
+  $('gateTitle').textContent = up ? 'Create your Todonut account' : 'Sign in to Todonut';
+  $('gateSub').textContent   = up ? 'One account, every device. Your lists live in it, not in this file.'
+                                  : 'Your lists live in your account, not in this file.';
+  $('gPass2').style.display  = up ? '' : 'none';
+  $('gPass').setAttribute('autocomplete', up ? 'new-password' : 'current-password');
+  $('gGo').textContent       = up ? 'Create account' : 'Sign in';
+  $('gSwapTxt').textContent  = up ? 'Already have an account?' : 'No account yet?';
+  $('gSwap').textContent     = up ? 'Sign in' : 'Create one';
+  $('gFoot').style.display   = up ? 'none' : '';
+  gmsg(null);
+}
+$('gSwap').addEventListener('click',function(e){
+  e.preventDefault(); setGateMode(GATE_MODE==='signup'?'signin':'signup');
+});
+
+function gateSubmit(){
+  var em=$('gEmail').value.trim(), pw=$('gPass').value;
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return gmsg('That does not look like an email address.',true);
+  if(pw.length<8) return gmsg('Password needs at least 8 characters.',true);
+  $('gGo').disabled=true;
+
+  if(GATE_MODE==='signup'){
+    if(pw!==$('gPass2').value){ $('gGo').disabled=false; return gmsg('The two passwords do not match.',true); }
+    gmsg('Creating your account…');
+    sb.auth.signUp({email:em,password:pw}).then(function(r){
+      $('gGo').disabled=false;
+      if(r.error) throw r.error;
+      if(r.data.session){ return afterSignIn(r.data.user); }
+      /* no session back = the project requires email confirmation */
+      /* ORDER MATTERS: setGateMode() clears the message box, so the mode
+         switch must happen BEFORE the message is written. Getting this
+         backwards silently swallowed the only instruction the user needed —
+         the same shape of bug as the error banner clearing itself on reload. */
+      setGateMode('signin');
+      $('gEmail').value=em;
+      gmsg('<b>Account created — but it needs confirming.</b> Check '+esc(em)+
+           ' and click the link, then come back and sign in.<br><br>'+
+           'If the confirmation page fails to load, that is expected: this app runs '+
+           'from a file, so there is nowhere for the redirect to land. The '+
+           'confirmation still happened.');
+    }).catch(function(e){
+      $('gGo').disabled=false; gmsg('Could not create the account: '+esc(e.message||String(e)),true);
+    });
+    return;
+  }
+
+  gmsg('Signing in…');
+  sb.auth.signInWithPassword({email:em,password:pw}).then(function(r){
+    $('gGo').disabled=false;
+    if(r.error) throw r.error;
+    return afterSignIn(r.data.user);
+  }).catch(function(e){
+    $('gGo').disabled=false;
+    var off=offlineMsg(e);
+    if(off){ gmsg(off,true); return; }
+    var m=String(e.message||e);
+    if(/not confirmed/i.test(m)) m='That account has not been confirmed yet — check your email for the link.';
+    gmsg('Could not sign in: '+esc(m),true);
+  });
+}
+$('gGo').addEventListener('click',gateSubmit);
+['gEmail','gPass','gPass2'].forEach(function(id){
+  $(id).addEventListener('keydown',function(e){ if(e.key==='Enter') gateSubmit(); });
+});
+
+function afterSignIn(user){
+  USER=user;
+  $('gPass').value=''; $('gPass2').value=''; gmsg(null);
+  hideGate(); refreshAcctChip();
+  elAnon.classList.toggle('show', isAnon());
+  return loadAll();
+}
+
+function boot(){
+  if(!window.supabase||!window.supabase.createClient){
+    setSync('err','offline');
+    showErr({message:'The Supabase library did not load. If you are offline, Todonut cannot reach your lists — they live in the database now, not in this file.'},'Cannot start');
+    return;
+  }
+  sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{
+    db:{schema:'todonut'},
+    auth:{persistSession:true, autoRefreshToken:true, storageKey:'todonut-auth'}
+  });
+  setSync('busy','checking sign-in…');
+  sb.auth.getSession().then(function(r){
+    var s=r.data && r.data.session;
+    if(s && s.user){
+      USER=s.user; refreshAcctChip();
+      if(isAnon()){
+        /* legacy anonymous session from a previous build — do not strand it */
+        elAnon.classList.add('show');
+        var lp=$('legacyPane');
+        lp.innerHTML='<b>You are on an old anonymous account.</b> Todonut no longer '+
+          'creates these. Its lists are still here — open the account chip to attach '+
+          'an email, or sign in below to switch to a real account (the anonymous '+
+          'one then becomes unreachable).';
+        lp.style.display='';
+      } else elAnon.classList.remove('show');
+      hideGate();
+      return loadAll();
+    }
+    /* no session: stop here. Nothing is created. */
+    setSync(null,'signed out');
+    setGateMode('signin');
+    showGate();
+  }).catch(function(e){
+    setGateMode('signin'); showGate();
+    gmsg('Could not reach your account: '+esc(e.message||String(e)),true);
+  });
+}
+
+/* ---------------- load ---------------- */
+function loadAll(){
+  setSync('busy','loading…');
+  return Promise.all([
+    sb.from('lists').select('id,name,position').order('position',{ascending:true}),
+    sb.from('items').select('id,list_id,text,done,position,section,priority,archived_at').order('position',{ascending:true})
+  ]).then(function(res){
+    if(res[0].error) throw res[0].error;
+    if(res[1].error) throw res[1].error;
+    var byList={};
+    (res[1].data||[]).forEach(function(i){ (byList[i.list_id]=byList[i.list_id]||[]).push(i); });
+    LISTS=(res[0].data||[]).map(function(l){ l.items=byList[l.id]||[]; return l; });
+    /* Deliberately does NOT clear the error banner. fail() shows an error and then
+       reloads to resync; if the reload wiped the banner, you'd see a red flash and
+       a clean screen and conclude your edit saved. The banner is cleared by an
+       explicit Refresh/Retry, or by the next mutation that actually succeeds. */
+    render(); refreshAcctChip();
+    setSync(elErr.classList.contains('show')?'err':'ok',
+                      elErr.classList.contains('show')?'last change failed':'synced');
+  }).catch(function(e){ showErr(e,'Could not load your lists'); });
+}
+
+/* ---------------- render ---------------- */
+function render(){
+  elCats.innerHTML='';
+  if(!LISTS.length){
+    var n=document.createElement('div'); n.className='nothing';
+    n.innerHTML='<span class="big">🍩</span>No lists yet.';
+    if(SEED && SEED.length){
+      var b=document.createElement('button'); b.className='btn-primary';
+      b.textContent='Bring in my '+SEED.length+' starter lists';
+      b.addEventListener('click',function(){ importParsed(SEED,'starter lists'); });
+      n.appendChild(document.createElement('br')); n.appendChild(b);
+    }
+    elCats.appendChild(n); return;
+  }
+  LISTS.forEach(function(cat){
+    var items=live(cat), arch=archived(cat);
+    var done=items.filter(function(i){return i.done;}).length;
+    var card=document.createElement('section');
+    card.className='cat'+(openSet[cat.id]?' open':'')+(selMode[cat.id]?' selecting':'');
+
+    var head=document.createElement('div'); head.className='cathead';
+    head.setAttribute('role','button'); head.setAttribute('tabindex','0');
+    var chev=document.createElement('span'); chev.className='chev'; chev.textContent='▾';
+    var name=document.createElement('span'); name.className='catname'; name.textContent=cat.name;
+    var pill=document.createElement('span');
+    pill.className='pill'+(items.length&&done===items.length?' allDone':'');
+    pill.textContent=items.length?(done+'/'+items.length):'empty';
+    head.appendChild(chev); head.appendChild(name); head.appendChild(pill);
+    head.addEventListener('click',function(){
+      openSet[cat.id]=!openSet[cat.id]; card.classList.toggle('open',!!openSet[cat.id]);
+    });
+    head.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){e.preventDefault();head.click();} });
+    card.appendChild(head);
+
+    var body=document.createElement('div'); body.className='catbody';
+
+    if(selMode[cat.id]){
+      var chosen=items.filter(function(i){ return picked[i.id]; });  /* live only */
+      var sb_=document.createElement('div'); sb_.className='selbar';
+      var n=document.createElement('span'); n.className='n';
+      n.textContent = chosen.length ? (chosen.length+' selected') : 'Tap items to select';
+      var all=document.createElement('button');
+      all.textContent = chosen.length===items.length ? 'Select none' : 'Select all';
+      all.addEventListener('click',function(){
+        var on = chosen.length!==items.length;
+        items.forEach(function(i){ if(on) picked[i.id]=1; else delete picked[i.id]; });
+        render();
+      });
+      var mvb=document.createElement('button');
+      mvb.className='go'; mvb.textContent='Move '+(chosen.length||'')+'…';
+      mvb.disabled = !chosen.length;
+      mvb.addEventListener('click',function(){ openMove(chosen, cat); });
+      var prib=document.createElement('button');
+      prib.textContent='Priority'; prib.disabled=!chosen.length;
+      prib.addEventListener('click',function(){ openPri(chosen, cat); });
+
+      var secb=document.createElement('button');
+      secb.textContent='Section'; secb.disabled=!chosen.length;
+      secb.addEventListener('click',function(){ openSect(chosen, cat); });
+
+      var arcb=document.createElement('button');
+      arcb.textContent='Archive'; arcb.disabled=!chosen.length;
+      arcb.addEventListener('click',function(){ archiveItems(chosen, cat, false); });
+
+      var delb=document.createElement('button');
+      delb.className='dg'; delb.textContent='Delete';
+      delb.disabled = !chosen.length;
+      arm(delb,'Delete','Delete '+chosen.length+'?',function(){
+        cat.items=cat.items.filter(function(x){ return !picked[x.id]; });
+        var ids=chosen.map(function(i){ return i.id; });
+        selMode[cat.id]=false; picked={}; render();
+        work(sb.from('items').delete().in('id',ids),'deleting')
+          .then(function(r){ if(r.error) throw r.error;
+                             setSync('ok',ids.length+' items deleted'); })
+          .catch(function(e){ fail(e,'Could not delete those items'); });
+      });
+      var cx=document.createElement('button'); cx.textContent='Cancel';
+      cx.addEventListener('click',function(){ selMode[cat.id]=false; picked={}; render(); });
+      sb_.appendChild(n); sb_.appendChild(all); sb_.appendChild(prib);
+      sb_.appendChild(secb); sb_.appendChild(mvb); sb_.appendChild(arcb);
+      sb_.appendChild(delb); sb_.appendChild(cx);
+      body.appendChild(sb_);
+    }
+
+    if(!items.length){
+      var em=document.createElement('div'); em.className='empty'; em.textContent='Nothing in here yet.';
+      body.appendChild(em);
+    } else {
+      var ul=document.createElement('ul');
+      var renderRow=function(item){
+        var li=document.createElement('li');
+        li.className='item'+(item.done?' done':'')+(picked[item.id]?' picked':'');
+        if(selMode[cat.id]){
+          var sbx=document.createElement('span'); sbx.className='sbox';
+          sbx.textContent = picked[item.id] ? '✓' : '';
+          var txt2=document.createElement('div'); txt2.className='txt'; txt2.textContent=item.text;
+          li.appendChild(sbx); li.appendChild(txt2);
+          li.addEventListener('click',function(){
+            if(picked[item.id]) delete picked[item.id]; else picked[item.id]=1;
+            render();
+          });
+          ul.appendChild(li);
+          return;
+        }
+        var box=document.createElement('button'); box.className='box';
+        box.setAttribute('aria-label',item.done?'Mark not done':'Mark done');
+        box.textContent=item.done?'✓':'';
+        box.addEventListener('click',function(){ toggleItem(cat,item,li); });
+        var pri=document.createElement('button');
+        pri.className='pri '+(item.priority?('p'+item.priority):'unset');
+        pri.textContent=item.priority?String(item.priority):'–';
+        pri.title=item.priority?('Priority '+item.priority+' — click to change'):'Set a priority';
+        pri.setAttribute('aria-label', item.priority?('Priority '+item.priority):'No priority');
+        pri.addEventListener('click',function(){ openPri([item], cat); });
+
+        var txt=document.createElement('div'); txt.className='txt'; txt.textContent=item.text;
+        var mv=document.createElement('button');
+        mv.className='mv'; mv.textContent='→';
+        mv.title='Move to another list';
+        mv.setAttribute('aria-label','Move to another list');
+        mv.addEventListener('click',function(){ openMove([item],cat); });
+
+        var del=document.createElement('button'); del.className='del'; del.textContent='✕';
+        del.setAttribute('aria-label','Delete item');
+        arm(del,'✕','Delete?',function(){ deleteItem(cat,item); });
+
+        /* desktop drag — inert on touch, which is exactly why the → button exists */
+        li.setAttribute('draggable','true');
+        li.addEventListener('dragstart',function(ev){
+          DRAG={item:item, from:cat};
+          li.classList.add('dragging');
+          try{ ev.dataTransfer.setData('text/plain', item.id);
+               ev.dataTransfer.effectAllowed='move'; }catch(e){}
+        });
+        li.addEventListener('dragend',function(){
+          li.classList.remove('dragging'); DRAG=null;
+          Array.prototype.forEach.call(document.querySelectorAll('.cat.droptarget'),
+            function(c){ c.classList.remove('droptarget'); });
+        });
+
+        li.appendChild(box); li.appendChild(pri); li.appendChild(txt);
+        li.appendChild(mv); li.appendChild(del);
+        ul.appendChild(li);
+      };
+
+      grouped(items).forEach(function(g){
+        if(g.name){
+          var h=document.createElement('div'); h.className='sect';
+          var nm=document.createElement('span'); nm.className='sectname'; nm.textContent=g.name;
+          var rule=document.createElement('span'); rule.className='sectrule';
+          var ct=document.createElement('span'); ct.className='sectn'; ct.textContent=g.items.length;
+          h.appendChild(nm); h.appendChild(rule); h.appendChild(ct);
+          body.appendChild(h);
+        }
+        ul=document.createElement('ul');
+        g.items.forEach(renderRow);
+        body.appendChild(ul);
+      });
+    }
+
+    if(arch.length){
+      var ab=document.createElement('div'); ab.className='archbar';
+      var at=document.createElement('span');
+      at.textContent=arch.length+' archived item'+(arch.length>1?'s':'');
+      at.style.marginRight='auto';
+      var tg=document.createElement('button');
+      tg.textContent=showArch[cat.id]?'Hide':'Show';
+      tg.addEventListener('click',function(){ showArch[cat.id]=!showArch[cat.id]; render(); });
+      ab.appendChild(at); ab.appendChild(tg);
+      body.appendChild(ab);
+
+      if(showArch[cat.id]){
+        var aul=document.createElement('ul');
+        arch.forEach(function(item){
+          var li=document.createElement('li'); li.className='item arch'+(item.done?' done':'');
+          var sp=document.createElement('span'); sp.className='pri unset'; sp.textContent='';
+          var tx=document.createElement('div'); tx.className='txt'; tx.textContent=item.text;
+          var un=document.createElement('button'); un.className='unarch'; un.textContent='↺';
+          un.title='Restore to the list'; un.setAttribute('aria-label','Restore');
+          un.addEventListener('click',function(){ archiveItems([item], null, true); });
+          var dl=document.createElement('button'); dl.className='del'; dl.textContent='✕';
+          dl.setAttribute('aria-label','Delete permanently');
+          arm(dl,'✕','Delete forever?',function(){ deleteItem(cat,item); });
+          li.appendChild(sp); li.appendChild(tx); li.appendChild(un); li.appendChild(dl);
+          aul.appendChild(li);
+        });
+        body.appendChild(aul);
+      }
+    }
+
+    var add=document.createElement('div'); add.className='additem';
+    var ai=document.createElement('input'); ai.type='text'; ai.placeholder='Add to '+cat.name+'…'; ai.autocomplete='off';
+    var ab=document.createElement('button'); ab.textContent='Add';
+    function go(){ var v=ai.value.trim(); if(!v) return; ai.value=''; addItem(cat,v); }
+    ab.addEventListener('click',go);
+    ai.addEventListener('keydown',function(e){ if(e.key==='Enter') go(); });
+    add.appendChild(ai); add.appendChild(ab); body.appendChild(add);
+    if(LISTS.length>1 && items.length){
+      var hint=document.createElement('div'); hint.className='movehint';
+      hint.textContent='Tap → to move one item. Select… moves several at once, and can split them into a brand-new list. On a computer you can also drag an item onto a list.';
+      body.appendChild(hint);
+    }
+
+    var foot=document.createElement('div'); foot.className='catfoot';
+    var sp=document.createElement('span'); sp.className='spacer';
+    foot.appendChild(sp);
+    if(items.length>1){
+      var selb=document.createElement('button');
+      selb.className='btn-ghost'; selb.textContent='Select…';
+      selb.addEventListener('click',function(){
+        picked={}; Object.keys(selMode).forEach(function(k){ selMode[k]=false; });
+        selMode[cat.id]=true; openSet[cat.id]=true; render();
+      });
+      foot.appendChild(selb);
+    }
+    var clr=document.createElement('button'); clr.className='btn-ghost';
+    clr.textContent='Archive ticked';
+    clr.title='Ticked items move to the archive below — reversible, not deleted';
+    clr.addEventListener('click',function(){ clearDone(cat); });
+    var dc=document.createElement('button'); dc.className='btn-ghost'; dc.textContent='Delete list';
+    arm(dc,'Delete list','Delete "'+cat.name+'" and everything in it?',function(){ deleteList(cat); });
+    foot.appendChild(clr); foot.appendChild(dc);
+    body.appendChild(foot);
+
+    card.addEventListener('dragover',function(ev){
+      if(!DRAG || DRAG.from.id===cat.id) return;
+      ev.preventDefault(); ev.dataTransfer.dropEffect='move';
+      card.classList.add('droptarget');
+    });
+    card.addEventListener('dragleave',function(ev){
+      if(!card.contains(ev.relatedTarget)) card.classList.remove('droptarget');
+    });
+    card.addEventListener('drop',function(ev){
+      if(!DRAG || DRAG.from.id===cat.id) return;
+      ev.preventDefault(); card.classList.remove('droptarget');
+      var d=DRAG; DRAG=null;
+      moveItems([d.item], d.from, cat);
+    });
+
+    card.appendChild(body); elCats.appendChild(card);
+  });
+}
+
+/* two-tap confirm — no browser dialogs */
+function arm(btn,idle,confirmTxt,fn){
+  var armed=false,t=null;
+  btn.addEventListener('click',function(){
+    if(!armed){
+      armed=true; btn.classList.add('confirm'); btn.textContent=confirmTxt;
+      t=setTimeout(function(){ armed=false; btn.classList.remove('confirm'); btn.textContent=idle; },3400);
+      return;
+    }
+    clearTimeout(t); armed=false; btn.classList.remove('confirm'); btn.textContent=idle;
+    fn();
+  });
+}
+
+/* ---------------- mutations (optimistic, reload on failure) ---------------- */
+function fail(e,what){ showErr(e,what); loadAll(); }
+
+function addList(name){
+  var pos=Date.now()/1000;
+  work(sb.from('lists').insert({name:name,position:pos}).select().single(),'adding list')
+    .then(function(r){
+      if(r.error) throw r.error;
+      r.data.items=[]; LISTS.push(r.data); openSet[r.data.id]=true; render();
+    }).catch(function(e){ fail(e,'Could not add the list'); });
+}
+function addItem(cat,text){
+  var pos=Date.now()/1000;
+  var tmp={id:'tmp'+pos,list_id:cat.id,text:text,done:false,position:pos,_pending:true};
+  cat.items.push(tmp); render();
+  work(sb.from('items').insert({list_id:cat.id,text:text,position:pos}).select().single(),'adding item')
+    .then(function(r){
+      if(r.error) throw r.error;
+      var i=cat.items.indexOf(tmp); if(i>=0) cat.items[i]=r.data; render();
+    }).catch(function(e){ fail(e,'Could not add the item'); });
+}
+function toggleItem(cat,item,li){
+  var next=!item.done;
+  item.done=next; if(li) li.classList.toggle('done',next); render();
+  work(sb.from('items').update({done:next,done_at:next?new Date().toISOString():null}).eq('id',item.id),'saving')
+    .then(function(r){ if(r.error) throw r.error; })
+    .catch(function(e){ fail(e,'Could not save that tick'); });
+}
+function deleteItem(cat,item){
+  cat.items=cat.items.filter(function(x){return x.id!==item.id;}); render();
+  work(sb.from('items').delete().eq('id',item.id),'deleting')
+    .then(function(r){ if(r.error) throw r.error; })
+    .catch(function(e){ fail(e,'Could not delete the item'); });
+}
+function clearDone(cat){
+  var chosen=live(cat).filter(function(i){ return i.done; });
+  if(!chosen.length){ setSync('ok','nothing ticked to archive'); return; }
+  archiveItems(chosen, null, false);
+}
+function deleteList(cat){
+  LISTS=LISTS.filter(function(l){return l.id!==cat.id;}); render();
+  work(sb.from('lists').delete().eq('id',cat.id),'deleting list')
+    .then(function(r){ if(r.error) throw r.error; })
+    .catch(function(e){ fail(e,'Could not delete the list'); });
+}
+
+/* ---------------- sections, priority, archive ---------------- */
+function live(cat){ return (cat.items||[]).filter(function(i){ return !i.archived_at; }); }
+function archived(cat){ return (cat.items||[]).filter(function(i){ return !!i.archived_at; }); }
+
+/* Sections are ordered by where their contents sit, not alphabetically — so a
+   section moves when its items do, and no extra column is needed to store order.
+   Unsectioned items come first: they are the inbox, and hiding them under an
+   "Other" heading at the bottom is how they stop getting looked at. */
+function grouped(items){
+  var none=[], byName={}, order=[];
+  items.forEach(function(i){
+    if(!i.section){ none.push(i); return; }
+    if(!byName[i.section]){ byName[i.section]=[]; order.push(i.section); }
+    byName[i.section].push(i);
+  });
+  order.sort(function(a,b){
+    var pa=Math.min.apply(null,byName[a].map(function(i){return i.position||0;}));
+    var pb=Math.min.apply(null,byName[b].map(function(i){return i.position||0;}));
+    return pa-pb;
+  });
+  var out=[];
+  if(none.length) out.push({name:null, items:none});
+  order.forEach(function(n){ out.push({name:n, items:byName[n]}); });
+  return out;
+}
+
+function setPriority(items, value){
+  items.forEach(function(i){ i.priority = value; });
+  render();
+  work(sb.from('items').update({priority:value}).in('id', items.map(function(i){return i.id;})), 'saving priority')
+    .then(function(r){ if(r.error) throw r.error;
+      setSync('ok', value===null ? 'priority cleared' : (items.length>1? items.length+' items set to P'+value : 'set to P'+value)); })
+    .catch(function(e){ fail(e,'Could not save that priority'); });
+}
+
+function setSection(items, name, cat){
+  var v = name && name.trim() ? name.trim() : null;
+  items.forEach(function(i){ i.section = v; });
+  if(cat){ selMode[cat.id]=false; picked={}; }
+  render();
+  work(sb.from('items').update({section:v}).in('id', items.map(function(i){return i.id;})), 'saving section')
+    .then(function(r){ if(r.error) throw r.error;
+      setSync('ok', v ? (items.length+' item'+(items.length>1?'s':'')+' moved to '+v) : 'section cleared'); })
+    .catch(function(e){ fail(e,'Could not save that section'); });
+}
+
+/* Archive is the safe default: reversible, and the nearest thing to the undo
+   that K10 still lacks. Delete stays available but has to be asked for. */
+function archiveItems(items, cat, restore){
+  var stamp = restore ? null : new Date().toISOString();
+  items.forEach(function(i){ i.archived_at = stamp; });
+  if(cat){ selMode[cat.id]=false; picked={}; }
+  render();
+  work(sb.from('items').update({archived_at:stamp}).in('id', items.map(function(i){return i.id;})),
+       restore?'restoring':'archiving')
+    .then(function(r){ if(r.error) throw r.error;
+      setSync('ok', items.length+' item'+(items.length>1?'s':'')+(restore?' restored':' archived')); })
+    .catch(function(e){ fail(e, restore?'Could not restore those items':'Could not archive those items'); });
+}
+
+/* ---------------- move an item between lists ---------------- */
+/* Menu first: it is the only mechanism that works on the phone, where HTML5
+   drag events never fire. Drag-and-drop is layered on top for the desktop. */
+function moveItems(items, fromCat, toCat){
+  if(!toCat || !items.length || toCat.id===fromCat.id) return;
+  var ids={}; items.forEach(function(i){ ids[i.id]=1; });
+  fromCat.items = (fromCat.items||[]).filter(function(x){ return !ids[x.id]; });
+  var base = (toCat.items||[]).reduce(function(m,i){ return Math.max(m, i.position||0); }, 0);
+  items.forEach(function(it,ix){ it.position = base + ix + 1; });
+  toCat.items = (toCat.items||[]).concat(items);
+  openSet[toCat.id]=true; selMode[fromCat.id]=false; picked={};
+  render();
+  work(Promise.all(items.map(function(it){
+      return sb.from('items').update({list_id: toCat.id, position: it.position}).eq('id', it.id);
+    })).then(function(rs){
+      var bad = rs.filter(function(r){ return r && r.error; });
+      if(bad.length) throw bad[0].error;
+      return {};
+    }), items.length>1 ? ('moving '+items.length+' items…') : 'moving')
+    .then(function(){
+      setSync('ok', (items.length>1 ? items.length+' items moved to ' : 'moved to ') + toCat.name);
+    })
+    .catch(function(e){ fail(e,'Could not move '+(items.length>1?'those items':'that item')); });
+}
+function moveItem(item, fromCat, toCat){ moveItems([item], fromCat, toCat); }
+
+var moveDlg=$('moveDlg'), movePending=null;
+$('moveCancel').addEventListener('click',function(){ moveDlg.close(); });
+
+function openMove(items, fromCat){
+  if(!items.length) return;
+  var one = items.length===1;
+  $('moveWhat').innerHTML = one
+    ? ('Moving <b>'+esc(items[0].text.slice(0,90))+(items[0].text.length>90?'…':'')+
+       '</b> out of <b>'+esc(fromCat.name)+'</b>.')
+    : ('Moving <b>'+items.length+' items</b> out of <b>'+esc(fromCat.name)+'</b>.');
+  var box=$('moveTargets'); box.innerHTML='';
+
+  /* Splitting a big list into a new one is the main way categories get made,
+     so it is a first-class target rather than a two-step chore. */
+  var nb=document.createElement('button');
+  nb.className='tgt newlist';
+  nb.innerHTML='＋ A new list…<span>'+items.length+' item'+(items.length>1?'s':'')+'</span>';
+  nb.addEventListener('click',function(){
+    var wrap=document.createElement('div');
+    wrap.innerHTML='<input type="text" id="newListName" placeholder="Name the new list" '+
+                   'autocomplete="off" style="margin-bottom:8px">'+
+                   '<button class="btn-primary full" id="newListGo">Create and move</button>';
+    box.innerHTML=''; box.appendChild(wrap);
+    var inp=$('newListName'); inp.focus();
+    function go(){
+      var nm=inp.value.trim(); if(!nm) return;
+      moveDlg.close();
+      var pos=Date.now()/1000;
+      work(sb.from('lists').insert({name:nm,position:pos}).select().single(),'creating list')
+        .then(function(r){
+          if(r.error) throw r.error;
+          r.data.items=[]; LISTS.push(r.data);
+          moveItems(items, fromCat, r.data);
+        }).catch(function(e){ fail(e,'Could not create that list'); });
+    }
+    $('newListGo').addEventListener('click',go);
+    inp.addEventListener('keydown',function(e){ if(e.key==='Enter') go(); });
+  });
+  box.appendChild(nb);
+
+  var others=LISTS.filter(function(l){ return l.id!==fromCat.id; });
+  if(!others.length){
+    var p=document.createElement('p'); p.style.margin='8px 0 0';
+    p.innerHTML='<b>'+esc(fromCat.name)+'</b> is your only list, so a new one is the '+
+                'only place to move '+(one?'it':'them')+'.';
+    box.appendChild(p);
+  }
+  others.forEach(function(l){
+    var b=document.createElement('button');
+    b.className='tgt';
+    b.innerHTML=esc(l.name)+'<span>'+((l.items||[]).length)+' items</span>';
+    b.addEventListener('click',function(){ moveDlg.close(); moveItems(items, fromCat, l); });
+    box.appendChild(b);
+  });
+  moveDlg.showModal();
+}
+
+/* ---------------- priority picker ---------------- */
+var PRI_LABEL={1:'Drop everything',2:'Soon',3:'Worth doing',4:'Someday',5:'Probably never'};
+var priDlg=$('priDlg');
+$('priCancel').addEventListener('click',function(){ priDlg.close(); });
+
+function openPri(items, cat){
+  var one=items.length===1;
+  $('priWhat').innerHTML = one
+    ? ('Setting priority on <b>'+esc(items[0].text.slice(0,80))+(items[0].text.length>80?'…':'')+'</b>.')
+    : ('Setting priority on <b>'+items.length+' items</b>.');
+  var box=$('priChoices'); box.innerHTML='';
+  [1,2,3,4,5].forEach(function(n){
+    var b=document.createElement('button');
+    b.className='tgt';
+    b.innerHTML='<span style="display:inline-block;width:22px;height:22px;border-radius:6px;'+
+      'text-align:center;line-height:22px;font-weight:800;font-size:12px;margin-right:9px;'+
+      'vertical-align:-5px" class="pri p'+n+'">'+n+'</span>'+PRI_LABEL[n];
+    b.addEventListener('click',function(){
+      priDlg.close();
+      if(cat){ selMode[cat.id]=false; picked={}; }
+      setPriority(items, n);
+    });
+    box.appendChild(b);
+  });
+  var c=document.createElement('button');
+  c.className='tgt'; c.style.background='#f4ede3';
+  c.innerHTML='<span style="color:#a99c8d;font-weight:800;margin-right:9px">–</span>No priority';
+  c.addEventListener('click',function(){
+    priDlg.close();
+    if(cat){ selMode[cat.id]=false; picked={}; }
+    setPriority(items, null);
+  });
+  box.appendChild(c);
+  priDlg.showModal();
+}
+
+/* ---------------- section picker ---------------- */
+var sectDlg=$('sectDlg'), sectPending=null;
+$('sectCancel').addEventListener('click',function(){ sectDlg.close(); });
+
+function openSect(items, cat){
+  sectPending={items:items, cat:cat};
+  $('sectWhat').innerHTML='Putting <b>'+items.length+' item'+(items.length>1?'s':'')+
+    '</b> into a section of <b>'+esc(cat.name)+'</b>.';
+  $('sectNew').value='';
+  var box=$('sectChoices'); box.innerHTML='';
+  var existing={};
+  live(cat).forEach(function(i){ if(i.section) existing[i.section]=(existing[i.section]||0)+1; });
+  var names=Object.keys(existing).sort();
+  names.forEach(function(n){
+    var b=document.createElement('button'); b.className='tgt';
+    b.innerHTML=esc(n)+'<span>'+existing[n]+'</span>';
+    b.addEventListener('click',function(){ sectDlg.close(); setSection(items, n, cat); });
+    box.appendChild(b);
+  });
+  if(names.length){
+    var none=document.createElement('button'); none.className='tgt'; none.style.background='#f4ede3';
+    none.innerHTML='<span style="color:#a99c8d">No section</span>';
+    none.addEventListener('click',function(){ sectDlg.close(); setSection(items, null, cat); });
+    box.appendChild(none);
+  } else {
+    var p=document.createElement('p'); p.style.margin='0 0 10px';
+    p.textContent='No sections in this list yet — name the first one below.';
+    box.appendChild(p);
+  }
+  sectDlg.showModal();
+  setTimeout(function(){ $('sectNew').focus(); },50);
+}
+function sectSubmit(){
+  if(!sectPending) return;
+  var v=$('sectNew').value.trim(); if(!v) return;
+  sectDlg.close(); setSection(sectPending.items, v, sectPending.cat);
+}
+$('sectGo').addEventListener('click',sectSubmit);
+$('sectNew').addEventListener('keydown',function(e){ if(e.key==='Enter') sectSubmit(); });
+
+/* ---------------- import ---------------- */
+/* Accepts the old app's .txt export AND a Todonut JSON backup. */
+function parseText(raw){
+  var lines=raw.split(/\r?\n/), out=[], cur=null;
+  lines.forEach(function(l){
+    if(!l.trim()) return;
+    var m=l.match(/^\s*[-*•]\s*(.+)$/);
+    if(m){ if(!cur){ cur={name:'Imported',items:[]}; out.push(cur); }
+           cur.items.push({text:m[1].trim()}); }
+    else { cur={name:l.trim().replace(/:\s*$/,''),items:[]}; out.push(cur); }
+  });
+  return out.filter(function(c){return c.name;});
+}
+function parseAny(raw,filename){
+  var t=raw.trim();
+  if(t.charAt(0)==='{'||t.charAt(0)==='['){
+    try{
+      var j=JSON.parse(t);
+      var arr=Array.isArray(j)?j:(j.categories||j.lists||[]);
+      var mapped=arr.map(function(c){
+        return {name:c.name||'Imported',
+                items:(c.items||[]).map(function(i){
+                  return typeof i==='string' ? {text:i} :
+                    {text:i.text||'', section:i.section||null, priority:i.priority||null,
+                     done:!!i.done, archived:!!i.archived};
+                }).filter(function(i){ return i.text; })};
+      }).filter(function(c){return c.name;});
+      if(mapped.length) return mapped;
+    }catch(e){ /* fall through to text */ }
+  }
+  var r=parseText(raw);
+  if(r.length===1 && r[0].name==='Imported' && filename)
+    r[0].name=filename.replace(/\.[^.]+$/,'');
+  return r;
+}
+function importParsed(parsed,label){
+  var total=parsed.reduce(function(t,c){return t+c.items.length;},0);
+  setSync('busy','importing '+parsed.length+' lists…');
+  var base=Date.now()/1000;
+  var chain=Promise.resolve(), made=0, added=0;
+  parsed.forEach(function(cat,ci){
+    chain=chain.then(function(){
+      return sb.from('lists').insert({name:cat.name,position:base+ci}).select().single()
+        .then(function(r){
+          if(r.error) throw r.error;
+          made++;
+          if(!cat.items.length) return;
+          var rows=cat.items.map(function(it,ii){
+            var o={list_id:r.data.id, text:(typeof it==='string'?it:it.text),
+                   position:base+ci+ii/10000};
+            if(it && typeof it==='object'){
+              if(it.section)  o.section  = it.section;
+              if(it.priority) o.priority = it.priority;
+              if(it.done)     o.done     = true;
+              if(it.archived) o.archived_at = new Date().toISOString();
+            }
+            return o;
+          });
+          return sb.from('items').insert(rows).then(function(r2){
+            if(r2.error) throw r2.error; added+=rows.length;
+          });
+        });
+    });
+  });
+  return chain.then(function(){
+    return loadAll().then(function(){
+      setSync('ok','imported '+made+' lists, '+added+' items');
+    });
+  }).catch(function(e){
+    showErr(e,'Import failed after '+made+' lists / '+added+' items — reloading to show what did land');
+    return loadAll();
+  });
+}
+
+/* ---------------- export ---------------- */
+function exportBackup(){
+  var payload={ app:'Todonut', version:2, exportedAt:new Date().toISOString(),
+    user_id:USER?USER.id:null,
+    categories:LISTS.map(function(l){
+      return {name:l.name, items:(l.items||[]).map(function(i){
+        return {text:i.text, done:!!i.done, section:i.section||null,
+                priority:i.priority||null, archived:!!i.archived_at}; })};
+    })};
+  var n=payload.categories.reduce(function(t,c){return t+c.items.length;},0);
+  var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  var url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url; a.download='todonut-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); },400);
+  setSync('ok','backed up '+LISTS.length+' lists / '+n+' items');
+}
+
+/* ---------------- wiring ---------------- */
+var SEED=[];
+try{ SEED=JSON.parse($('seed-data').textContent)||[]; }catch(e){ SEED=[]; }
+
+$('addCatBtn').addEventListener('click',function(){
+  var v=$('newCatInput').value.trim(); if(!v) return;
+  $('newCatInput').value=''; addList(v);
+});
+$('newCatInput').addEventListener('keydown',function(e){ if(e.key==='Enter') $('addCatBtn').click(); });
+$('refreshBtn').addEventListener('click',function(){ clearErr(); loadAll(); });
+$('exportBtn').addEventListener('click',exportBackup);
+$('exportNow').addEventListener('click',exportBackup);
+
+/* import dialog */
+var dlg=$('importDlg'), pending=null;
+function preview(parsed){
+  pending=parsed;
+  var pv=$('importPreview');
+  if(!parsed||!parsed.length){ pv.classList.remove('show'); $('importGo').disabled=true; return; }
+  var n=parsed.reduce(function(t,c){return t+c.items.length;},0);
+  pv.innerHTML='<b>'+parsed.length+' list'+(parsed.length>1?'s':'')+', '+n+' items</b><br>'+
+    parsed.map(function(c){ return esc(c.name)+' — '+c.items.length; }).join('<br>');
+  pv.classList.add('show'); $('importGo').disabled=false;
+}
+$('importBtn').addEventListener('click',function(){
+  $('importText').value=''; $('importFile').value=''; preview(null); dlg.showModal();
+});
+$('importCancel').addEventListener('click',function(){ dlg.close(); });
+$('importText').addEventListener('input',function(){
+  var v=$('importText').value; preview(v.trim()?parseAny(v,''):null);
+});
+$('importFile').addEventListener('change',function(){
+  var files=Array.prototype.slice.call($('importFile').files||[]);
+  if(!files.length) return;
+  Promise.all(files.map(function(f){
+    return f.text().then(function(t){ return parseAny(t,f.name); });
+  })).then(function(all){ preview([].concat.apply([],all)); });
+});
+$('importGo').addEventListener('click',function(){
+  if(!pending) return;
+  dlg.close(); importParsed(pending,'import');
+});
+
+/* ---------------- account ---------------- */
+var acctDlg=$('acctDlg');
+
+function isAnon(){ return !!(USER && USER.is_anonymous); }
+function myItemCount(){
+  return LISTS.reduce(function(t,l){ return t+(l.items?l.items.length:0); },0);
+}
+function refreshAcctChip(){
+  var b=$('acctBtn');
+  if(!USER){ b.className='acct'; b.textContent='…'; return; }
+  if(isAnon()){ b.className='acct anon'; b.textContent='not signed in'; }
+  else { b.className='acct real'; b.textContent=USER.email||'signed in'; }
+}
+function openAcct(){
+  var msg=$('acctMsg'); msg.className='preview';
+  refreshAcctChip();
+  var n=myItemCount(), nl=LISTS.length;
+  if(isAnon()){
+    $('acctTitle').textContent='Set up a real login';
+    $('acctWho').innerHTML='This browser is signed in as an <b>anonymous</b> account '+
+      'created automatically the first time you opened Todonut here. It holds <b>'+
+      nl+' list'+(nl===1?'':'s')+' / '+n+' item'+(n===1?'':'s')+'</b>.';
+    $('claimCount').textContent=nl+' list'+(nl===1?'':'s')+' / '+n+' item'+(n===1?'':'s');
+    $('anonPane').style.display=''; $('realPane').style.display='none';
+    /* the orphan guard — only meaningful when this device holds something */
+    var w=$('orphanWarn');
+    if(n>0){
+      w.innerHTML='<b>Signing in will hide the '+n+' item'+(n===1?'':'s')+' on this device.</b> '+
+        'They belong to this anonymous account, and signing in makes you a different user. '+
+        'They are not deleted — but nothing will ever be able to sign in as this account again. '+
+        '<b>Back up first</b> if you want them.';
+      w.style.display='';
+      if(!$('orphanBk')){
+        var bk=document.createElement('button');
+        bk.id='orphanBk'; bk.className='btn-ghost'; bk.textContent='Download a backup first';
+        bk.style.marginBottom='9px';
+        bk.addEventListener('click',exportBackup);
+        w.parentNode.insertBefore(bk,w.nextSibling);
+      }
+    } else {
+      w.innerHTML='Nothing on this device to lose — it holds no lists.';
+      w.style.display='';
+      var ob=$('orphanBk'); if(ob) ob.parentNode.removeChild(ob);
+    }
+  } else {
+    $('acctTitle').textContent='Account';
+    $('acctWho').innerHTML='Signed in as <b>'+esc(USER.email||'(no email)')+'</b>, holding <b>'+
+      nl+' list'+(nl===1?'':'s')+' / '+n+' item'+(n===1?'':'s')+'</b>.';
+    $('anonPane').style.display='none'; $('realPane').style.display='';
+    var cn=$('confirmNote');
+    if(USER.email && !USER.email_confirmed_at && !USER.confirmed_at){
+      cn.innerHTML='<b>Email not confirmed yet.</b> Check your inbox and click the link. '+
+        'The page it opens may fail to load — that is expected, the confirmation happens '+
+        'before the redirect. Come back and press Refresh.';
+      cn.style.display='';
+    } else cn.style.display='none';
+  }
+  acctDlg.showModal();
+}
+$('acctBtn').addEventListener('click',openAcct);
+$('claimBtn').addEventListener('click',openAcct);
+$('acctClose').addEventListener('click',function(){ acctDlg.close(); });
+
+function acctMsg(t,bad){
+  var m=$('acctMsg'); m.innerHTML=t; m.className='preview show';
+  m.style.color = bad ? '#8f2d18' : '';
+}
+
+/* claim: attach email + password to THIS anonymous account, keeping its rows */
+$('claimGo').addEventListener('click',function(){
+  var em=$('claimEmail').value.trim(), pw=$('claimPass').value;
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return acctMsg('That does not look like an email address.',true);
+  if(pw.length<8) return acctMsg('Password needs at least 8 characters.',true);
+  acctMsg('Setting a password…');
+  sb.auth.updateUser({password:pw}).then(function(r){
+    if(r.error) throw r.error;
+    acctMsg('Password set. Adding your email…');
+    return sb.auth.updateUser({email:em});
+  }).then(function(r){
+    if(r.error) throw r.error;
+    acctMsg('<b>Check '+esc(em)+' and click the confirmation link.</b><br>'+
+      'The page it opens may fail to load — that is expected. The confirmation happens '+
+      'server-side before the redirect, so a broken page does not mean it failed.<br><br>'+
+      'Your user ID and all '+myItemCount()+' items are unchanged. '+
+      'Once confirmed, sign in on your other device with this email and password.');
+    return sb.auth.getUser().then(function(u){ if(u.data&&u.data.user){ USER=u.data.user; refreshAcctChip(); } });
+  }).catch(function(e){ acctMsg('Failed: '+esc(e.message||String(e)),true); });
+});
+
+/* sign in: become an existing account on THIS device */
+$('siGo').addEventListener('click',function(){
+  var em=$('siEmail').value.trim(), pw=$('siPass').value;
+  if(!em||!pw) return acctMsg('Email and password both needed.',true);
+  acctMsg('Signing in…');
+  sb.auth.signInWithPassword({email:em,password:pw}).then(function(r){
+    if(r.error) throw r.error;
+    USER=r.data.user; refreshAcctChip();
+    elAnon.classList.toggle('show', isAnon());
+    acctDlg.close();
+    return loadAll();
+  }).catch(function(e){
+    var off=offlineMsg(e);
+    acctMsg(off || ('Failed: '+esc(e.message||String(e))),true);
+  });
+});
+
+$('signOutBtn').addEventListener('click',function(){
+  acctMsg('Signing out…');
+  sb.auth.signOut().then(function(){
+    acctDlg.close();
+    USER=null; LISTS=[]; openSet={}; render();
+    elAnon.classList.remove('show'); clearErr();
+    refreshAcctChip(); setSync(null,'signed out');
+    setGateMode('signin'); showGate();
+  });
+});
+
+boot();
+})();
+</script>
+</body>
+</html>

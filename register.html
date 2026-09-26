@@ -1,0 +1,977 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Build Register</title>
+<!--
+  BUILD REGISTER — a second self-contained app in the same mould as
+  cct-app.html: lives in the project folder, opened straight off disk, keeps
+  the publishable key in the page, signs in, talks to PostgREST. No Python, no
+  port, no build step. Works from any machine with a browser.
+
+  ⚠ WHY IT IS NOT A LOCAL FILE. It was, first: register.json plus a Python
+    server. Saving needed `python register-server.py` running, which fails the
+    actual requirement — double-click it, and use it from a PC where Python is
+    not installed.
+
+  ⚠ WHY IT NEEDS A LOGIN. The publishable key is in this file BY DESIGN and is
+    not a secret; the gate already permits these apps to be served publicly.
+    reg_* is therefore cct_at_least('admin') on every verb. Without that it
+    would be a world-writable tracker — the `12` breach shape exactly.
+
+  ⚠ THE MARKDOWN IS STILL GENERATED. build-register.md is rebuilt from this
+    database at every checkpoint and stays in the folder: RECOVERY-MANIFEST
+    depends on it, CLAUDE.md's start-of-session read depends on it, and grep
+    and Dropbox history only work on files. Database authoritative, markdown
+    generated, never both.
+-->
+<style>
+  :root{ --ink:#1a1a1a; --muted:#6b7280; --line:#e3e5ea; --paper:#f7f8fa;
+         --accent:#2563eb; --accent-soft:#eaf1fe; --bad:#b42318; --ok:#166534; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font:14px/1.45 -apple-system,Segoe UI,Roboto,sans-serif; color:var(--ink); background:var(--paper); }
+  header{ position:sticky; top:0; z-index:20; background:#fff; border-bottom:1px solid var(--line);
+          padding:10px 16px; display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+  .brand{ font-weight:800; letter-spacing:-.02em; }
+  /* The guide is a sibling file in tools\, never copied into a project. */
+  #howto{
+    font-size:12.5px; text-decoration:none; white-space:nowrap;
+    padding:5px 11px; border:1px solid var(--line); border-radius:7px;
+    color:var(--muted); background:#fff;
+  }
+  #howto:hover, #howto:focus-visible{ color:var(--ink); border-color:var(--muted); }
+  .spacer{ flex:1; }
+  input,select,textarea,button{ font:inherit; }
+  input[type=search],input[type=email],input[type=password],select{
+    padding:5px 8px; border:1px solid var(--line); border-radius:7px; background:#fff; }
+  input[type=search]{ min-width:230px; }
+  button{ border:1px solid var(--line); background:#fff; border-radius:7px; padding:5px 11px; cursor:pointer; font-weight:600; }
+  button.primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  button:disabled{ opacity:.45; cursor:not-allowed; }
+  .count{ color:var(--muted); font-size:12.5px; }
+  #proj{ font-weight:700; }
+  main{ padding:14px 16px 80px; }
+  table{ width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); border-radius:10px; }
+  th,td{ text-align:left; padding:7px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th{ font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
+      position:sticky; top:53px; background:#fff; z-index:10; }
+  tr:last-child td{ border-bottom:0; }
+  td.id{ font-family:ui-monospace,Menlo,monospace; font-size:12px; white-space:nowrap; color:var(--muted); }
+  td.title{ cursor:pointer; }
+  td.title .t{ font-weight:600; }
+  td.title .b{ color:var(--muted); font-size:12.5px; }
+  h2.area{ font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);
+           margin:18px 0 6px; }
+  h2.area span{ color:var(--ink); font-weight:800; letter-spacing:0; text-transform:none;
+                font-size:14px; margin-right:7px; }
+  .sst{ font-size:11px; font-weight:700; padding:2px 7px; border-radius:999px; white-space:nowrap;
+        border:1px solid var(--line); }
+  .sst.Confirmed{ background:#e8f5ec; color:var(--ok); border-color:#bfe3cb; }
+  .sst.Proposed{ background:var(--accent-soft); color:var(--accent); border-color:#c9ddfb; }
+  .sst.DEFERRED{ background:#fff4e5; color:#9a5b00; border-color:#f0d9b5; }
+  .sst.RETIRED{ background:#f3f4f6; color:var(--muted); text-decoration:line-through; }
+  td.qmark{ color:var(--accent); font-weight:800; }
+  tr.sel{ background:var(--accent-soft); }
+  tr.hasnote td.id::after{ content:"✎"; color:var(--accent); margin-left:5px; }
+  .st{ font-size:11px; font-weight:700; padding:2px 7px; border-radius:5px; white-space:nowrap; }
+  .st.open{ background:#fee4e2; color:var(--bad); }
+  .st.proposed{ background:#dbeafe; color:#1e40af; }
+  .st.done{ background:#dcfce7; color:var(--ok); }
+  .st.cancelled{ background:#f1f2f4; color:var(--muted); text-decoration:line-through; }
+  .st.expired{ background:#fef0c7; color:#8a5a00; }
+  .st.obsolete{ background:#e7e5e4; color:#57534e; font-style:italic; }
+  .st.blocked{ background:#ffe4e6; color:#9f1239; }
+  .st.noted{ background:#ede9fe; color:#5b21b6; }
+  .st.untagged{ background:#fff; color:var(--muted); border:1px dashed var(--line); }
+  #drawer{ position:fixed; right:0; top:0; bottom:0; width:min(640px,94vw); background:#fff;
+           border-left:1px solid var(--line); box-shadow:-8px 0 30px rgba(0,0,0,.08);
+           padding:16px 18px 90px; overflow:auto; transform:translateX(100%); transition:transform .15s; z-index:40; }
+  #drawer.on{ transform:none; }
+  #drawer h2{ margin:0 0 2px; font-size:16px; }
+  #drawer .sub{ color:var(--muted); font-size:12.5px; margin-bottom:12px; }
+  #drawer label{ display:block; font-size:11px; font-weight:700; text-transform:uppercase;
+                 letter-spacing:.04em; color:var(--muted); margin:14px 0 4px; }
+  #drawer .body{ white-space:pre-wrap; background:var(--paper); border:1px solid var(--line);
+                 border-radius:8px; padding:10px 12px; font-size:13px; }
+  #drawer textarea{ width:100%; min-height:90px; padding:8px 10px; border:1px solid var(--line);
+                    border-radius:8px; resize:vertical; }
+  #drawer select{ width:100%; padding:6px 9px; border:1px solid var(--line); border-radius:7px; }
+  .row2{ display:flex; gap:10px; } .row2>div{ flex:1; }
+  .chg{ font-size:12px; border-left:2px solid var(--line); padding:3px 0 3px 9px; margin:5px 0; color:var(--muted); }
+  .chg b{ color:var(--ink); }
+  .warn{ background:#fef0c7; border:1px solid #f5d576; border-radius:8px; padding:9px 11px; font-size:12.5px; margin:10px 0; }
+  footer{ position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--line);
+          padding:9px 16px; display:flex; align-items:center; gap:10px; z-index:50; }
+  .dirty{ color:var(--bad); font-weight:700; }
+  .okmsg{ color:var(--ok); font-weight:700; }
+  .refchip{ display:inline-block; font-size:11.5px; font-weight:700; padding:2px 8px;
+    margin:3px 4px 0 0; border-radius:20px; border:1px solid var(--line);
+    background:#fff; cursor:pointer; white-space:nowrap; }
+  .refchip:hover{ border-color:var(--accent); color:var(--accent); }
+  .refchip .rl{ font-family:ui-monospace,Menlo,monospace; color:var(--muted); font-weight:600; }
+  .refnote{ font-size:11.5px; color:var(--muted); margin-top:6px; }
+  td.cap{ font-family:ui-monospace,Menlo,monospace; font-size:11.5px; white-space:nowrap; }
+  td.cap.exact{ color:var(--ink); }
+  #summary{ display:flex; align-items:flex-end; gap:5px; flex-wrap:wrap;
+            margin:0 0 12px; padding:8px 10px; background:#fff;
+            border:1px solid var(--line); border-radius:10px; min-height:34px; }
+  .sday{ display:inline-flex; flex-direction:column; align-items:center; gap:1px; cursor:help; }
+  .sbar{ width:20px; background:var(--accent); border-radius:2px 2px 0 0; display:block; }
+  .sdl{ font-size:9.5px; color:var(--muted); }
+  .sdn{ font-size:9.5px; font-weight:700; color:var(--ink); }
+  .drag{ cursor:grab; color:var(--muted); user-select:none; }
+  tr.dragover td{ box-shadow:inset 0 2px 0 0 var(--accent); }
+  #login{ position:fixed; inset:0; background:rgba(20,22,28,.55); display:flex;
+          align-items:center; justify-content:center; z-index:100; }
+  #login .box{ background:#fff; border-radius:12px; padding:22px 24px; width:min(400px,92vw);
+               box-shadow:0 16px 50px rgba(0,0,0,.3); }
+  #login h3{ margin:0 0 4px; font-size:16px; }
+  #login p{ margin:0 0 14px; font-size:12.5px; color:var(--muted); }
+  #login input{ width:100%; margin-bottom:9px; }
+  #login .err{ color:var(--bad); font-size:12.5px; min-height:17px; }
+</style>
+
+<header>
+  <span class="brand">Register</span>
+  <select id="proj" title="Which project's register"></select>
+  <input type="search" id="q" placeholder="search id, text, spec…  (/)">
+  <select id="fType"><option value="">type: all</option><option>work</option><option>record</option><option value="__none">untagged</option></select>
+  <select id="fStatus"><option value="">status: all</option></select>
+  <select id="fOrigin"><option value="">origin: all</option><option value="__none">unset</option></select>
+  <select id="fSrc"><option value="">request: all</option><option value="__has">traced</option><option value="__pre">predates archive</option><option value="__none">not traced</option></select>
+  <select id="fCat"><option value="">category: all</option></select>
+  <select id="fTable"><option value="">table: all</option></select>
+  <select id="fSpecStatus" style="display:none"><option value="">spec status: all</option><option>Confirmed</option><option>Proposed</option><option>DEFERRED</option><option>RETIRED</option></select>
+  <label style="font-size:12.5px;display:none" id="lQ"><input type="checkbox" id="fQ"> questions only</label>
+  <label style="font-size:12.5px"><input type="checkbox" id="fNotes"> my notes</label>
+  <button id="mode" title="Switch between the register (work) and the spec (requirements)">Spec &rsaquo;</button>
+  <span class="spacer"></span>
+  <span class="count" id="count"></span>
+  <a id="howto" href="how-this-project-runs.html" target="_blank" rel="noopener"
+     title="How this project runs — the shared instruction sheet">? How this works</a>
+  <button id="out" title="Sign out">⎋</button>
+</header>
+
+<main><div id="summary"></div><div id="wrap"></div></main>
+<div id="drawer"></div>
+
+<footer>
+  <button id="reload">Reload</button>
+  <span id="status" class="count"></span>
+  <span class="spacer"></span>
+  <span class="count" id="who"></span>
+</footer>
+
+<div id="login" style="display:none"><div class="box">
+  <h3>Sign in</h3>
+  <p>The register is admin-only. Same account as the CCT app.</p>
+  <input id="li_em" type="email" placeholder="email" autocomplete="username">
+  <input id="li_pw" type="password" placeholder="password" autocomplete="current-password">
+  <div class="err" id="li_err"></div>
+  <button class="primary" id="li_go" style="width:100%;margin-top:6px">Sign in</button>
+</div></div>
+
+<script>
+const SUPABASE_URL = "https://szvlvfgslymhlgdsjzyd.supabase.co";
+const SUPABASE_KEY = "sb_publishable_oEhQnbZ6uyM3Mr1mWp7Z1Q_exCnRIfm";
+const AUTH_URL     = SUPABASE_URL + "/auth/v1";
+const SESSION_KEY  = "cct.register.session";   // separate from cct-app's own
+
+const $ = s => document.querySelector(s);
+/* ⚠ expired AND obsolete ARE DIFFERENT AND THE DIFFERENCE IS THE POINT.
+     expired  = THE WORLD changed; the premise stopped being true.
+     obsolete = WE changed; a later design decision removed the need.
+   Counting `obsolete` measures design churn — how often a decision invalidated
+   earlier planning. Counting `expired` would blame the plan for the weather.
+   Collapsing them destroys the only reason to record either. */
+const STATUSES = ["open","proposed","blocked","deferred","done","cancelled","expired","obsolete","noted"];
+
+/* Four fields, each answering ONE question and only one:
+     type      is there an action?        work | record
+     status    what state is it in?       open | deferred | done | ...
+     category  what part of the project?  db | app | doc | ...
+     origin    where did it come from?    the four below
+   `insight` used to live in `category`, so "all insights" and "all database
+   work" competed for one field. Migration 27 separated them. */
+const ORIGINS = ["planned","captured","discovered","observed"];
+const ORIGIN_HELP = {
+  planned:    "decided work, from a design decision — gets a position",
+  captured:   "an idea or tangent, not committed — waits for a review pass",
+  discovered: "a task found while doing something else — needs triage",
+  observed:   "an insight from building or UAT — never actioned, kept so it is not relearned"
+};
+let SESSION = null, PROJECTS = [], PROJ = null, BLOCKS = [], ITEMS = [], CUR = null;
+let MODE = "register", SPEC_AREAS = null, SPEC_REFS = [];
+
+/* ---------- auth: same shape as cct-app.html, deliberately ---------- */
+const H = () => ({ apikey: SUPABASE_KEY,
+                   Authorization: "Bearer " + ((SESSION && SESSION.access_token) || SUPABASE_KEY),
+                   "Content-Type": "application/json" });
+/* Storage can simply not exist, and the app must not die when it does not.
+   Private windows with site data blocked, sandboxed frames, and data: URLs all
+   throw on access rather than returning null -- found 2026-09-22 when the app
+   was opened in a preview pane and loadProjects() threw before it could choose
+   a project.
+
+   THREE OF THE FOUR CALLS WERE UNGUARDED AND ONE WAS NOT, which is the shape
+   of a fix applied to the instance somebody hit rather than to the class. The
+   right degradation is "does not remember your project", never "does not
+   start". */
+const store = {
+  get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
+  set(k, v){ try{ localStorage.setItem(k, v); return true; }catch(e){ return false; } },
+  del(k){ try{ localStorage.removeItem(k); return true; }catch(e){ return false; } }
+};
+
+function loadSession(){
+  try{ SESSION = JSON.parse(store.get(SESSION_KEY) || "null"); }catch(e){ SESSION = null; }
+  return SESSION;
+}
+function saveSession(s){
+  SESSION = s;
+  if(s) store.set(SESSION_KEY, JSON.stringify(s)); else store.del(SESSION_KEY);
+}
+async function signIn(email, password){
+  const r = await fetch(AUTH_URL + "/token?grant_type=password", {
+    method:"POST", headers:{ apikey:SUPABASE_KEY, "Content-Type":"application/json" },
+    body: JSON.stringify({ email, password }) });
+  const b = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(b.error_description || b.msg || b.message || ("Sign-in failed ("+r.status+")"));
+  saveSession({ access_token:b.access_token, refresh_token:b.refresh_token,
+                expires_at: Date.now() + (b.expires_in||3600)*1000, user:b.user });
+}
+async function refreshSession(){
+  if(!SESSION || !SESSION.refresh_token) return null;
+  let r;
+  try{
+    r = await fetch(AUTH_URL + "/token?grant_type=refresh_token", {
+      method:"POST", headers:{ apikey:SUPABASE_KEY, "Content-Type":"application/json" },
+      body: JSON.stringify({ refresh_token: SESSION.refresh_token }) });
+  }catch(e){ return SESSION; }             // offline: keep it rather than signing out
+  if(!r.ok){ saveSession(null); return null; }
+  const b = await r.json();
+  saveSession({ access_token:b.access_token, refresh_token:b.refresh_token,
+                expires_at: Date.now() + (b.expires_in||3600)*1000, user:b.user || SESSION.user });
+  return SESSION;
+}
+
+async function api(path, opts){
+  if(SESSION && SESSION.expires_at && Date.now() > SESSION.expires_at - 60000) await refreshSession();
+  const r = await fetch(SUPABASE_URL + "/rest/v1/" + path,
+                        { ...opts, headers:{ ...H(), ...((opts&&opts.headers)||{}) } });
+  if(r.status === 401){ saveSession(null); showLogin("Session expired — sign in again."); }
+  return r;
+}
+
+/* ⚠ A REFUSED WRITE IS NOT AN HTTP ERROR.
+   PostgREST answers a write blocked by RLS with 200 and an EMPTY ARRAY, so
+   checking r.ok reports success on a write the database declined. That defect
+   sat in cct-app.html for three weeks. Every write here asks for the row back
+   and counts it. */
+async function write(path, opts){
+  const r = await api(path, { ...opts, headers:{ Prefer:"return=representation", ...(opts.headers||{}) } });
+  if(!r.ok) throw new Error("HTTP " + r.status + " " + (await r.text()).slice(0,200));
+  const rows = await r.json().catch(()=>[]);
+  if(Array.isArray(rows) && rows.length === 0)
+    throw new Error("The database refused this write (row-level security). NOTHING WAS SAVED.");
+  return rows;
+}
+
+/* ---------- helpers ---------- */
+function statusOf(r){ return r.status || "untagged"; }
+
+/* ⚠ created_at IS THE IMPORT TIMESTAMP, not a create date — all 211 migrated
+   rows read 2026-09-01 19:31:38-40, the three INSERT batches. It is never
+   shown. What IS shown:
+     captured_at  exact date+time, when one genuinely exists
+     captured_on  DAY ONLY, derived from the session tag — the markdown never
+                  recorded a time, and inventing midnight would manufacture
+                  precision that does not exist
+   The dagger marks day-only so the two can never be mistaken for each other. */
+function capturedText(r){
+  if (r.captured_at){
+    const d = new Date(r.captured_at);
+    return { text: d.toISOString().slice(0,16).replace("T"," ") + "Z", exact: true };
+  }
+  if (r.captured_on) return { text: r.captured_on + " †", exact: false };
+  return { text: "—", exact: false };
+}
+function capturedSort(r){
+  return r.captured_at ? Date.parse(r.captured_at)
+       : r.captured_on ? Date.parse(r.captured_on + "T12:00:00Z")   // midday: sorts within its day
+       : 0;
+}
+function strip(md){
+  return (md||"").replace(/\*\*/g,"").replace(/`/g,"").replace(/~~/g,"")
+                 .replace(/\\\|/g,"|").replace(/\s+/g," ").trim();
+}
+function bodyOf(r){
+  const c = r.cells || [];
+  if (r._table === "Next up")                  return c[2] || "";
+  if (r._table === "Divergences to reconcile") return c.slice(1).join("  —  ");
+  return c[1] || "";
+}
+function titleOf(r){
+  const raw = bodyOf(r); const m = raw.match(/\*\*(.+?)\*\*/);
+  return strip(m ? m[1] : strip(raw).slice(0,90)).slice(0,110);
+}
+/* ⚠ fill() REBUILDS THE OPTION LIST, so any option written in the HTML is
+   destroyed on load. The origin filter's "unset" choice was hardcoded in the
+   markup and vanished here — selecting it then did nothing at all, silently,
+   and the filter appeared to be broken rather than absent. Extras must be
+   passed in, not assumed to survive. */
+function fill(sel_, name, vals, extras){
+  const s=$(sel_); const keep=s.value; s.innerHTML="";
+  const o=document.createElement("option"); o.value=""; o.textContent=name+": all"; s.appendChild(o);
+  (extras||[]).forEach(e=>{
+    const x=document.createElement("option"); x.value=e.value; x.textContent=e.label; s.appendChild(x); });
+  vals.forEach(v=>{ const x=document.createElement("option"); x.value=v; x.textContent=v; s.appendChild(x); });
+  s.value = keep;
+}
+function msg(t, cls){ $("#status").innerHTML = cls ? "<span class='"+cls+"'>"+t+"</span>" : t; }
+function esc(s){ return s==null ? "<i>—</i>"
+  : String(s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c])).slice(0,300); }
+
+/* Keep the guide link pointed at the current project. The guide ignores
+   ?p= today; project-specific exceptions are deferred, and passing the slug
+   now means that feature needs no change here. */
+function syncHowto(){
+  const a = $("#howto");
+  if(!a) return;
+  a.href = "how-this-project-runs.html"
+         + (PROJ && PROJ.slug ? "?p=" + encodeURIComponent(PROJ.slug) : "");
+}
+
+/* ---------- load ---------- */
+async function loadProjects(){
+  const r = await api("reg_projects?select=*&archived=is.false&order=sort_order,name");
+  if(!r.ok) throw new Error("cannot read reg_projects (HTTP " + r.status + ")");
+  PROJECTS = await r.json();
+  const sel = $("#proj"); sel.innerHTML = "";
+  PROJECTS.forEach(p=>{
+    const o=document.createElement("option"); o.value=p.id; o.textContent=p.name; sel.appendChild(o);
+  });
+  /* Which project?  ?p=<slug>  wins over the remembered one, which wins over
+     the first. The URL param exists so each project folder can hold a tiny
+     redirect stub that deep-links to ITS register — one canonical copy of
+     this app, many doorways.
+
+     ⚠ AN UNKNOWN SLUG IS AN ERROR, NOT A FALLBACK. Silently showing some
+       other project's register because a stub went stale is the worst
+       outcome: the app looks like it worked and the rows are the wrong
+       project's. Say so instead. */
+  const wanted = new URLSearchParams(location.search).get("p");
+  if(wanted){
+    const hit = PROJECTS.find(p=>p.slug===wanted);
+    if(!hit){
+      PROJ = null;
+      $("#wrap").innerHTML = "<p class='count'>No project with slug <b>"
+        + esc(wanted) + "</b>. Known: "
+        + PROJECTS.map(p=>"<code>"+esc(p.slug)+"</code>").join(", ")
+        + ". Fix the stub that opened this, or pick from the header.</p>";
+      sel.value = "";
+      return;
+    }
+    PROJ = hit;
+    sel.value = PROJ.id;
+    syncHowto();
+    return;                       // do not overwrite the remembered choice
+  }
+  syncHowto();
+  const remembered = store.get("cct.register.proj");
+  PROJ = PROJECTS.find(p=>p.id===remembered) || PROJECTS[0] || null;
+  if(PROJ) sel.value = PROJ.id;
+}
+
+async function loadRegister(){
+  if(!PROJ){
+    /* ⚠ PROJ is null for two unrelated reasons and they must never share a
+       message. loadProjects() has ALREADY written an accurate diagnostic when
+       a ?p= slug missed; overwriting it here is what turned "no project with
+       slug X" into the false "the register is empty" — which is unreadable
+       from a project whose register is legitimately empty. Only claim
+       emptiness when the register really is empty.
+       Found from Hearth, 2026-09-19. */
+    if(!PROJECTS.length) $("#wrap").innerHTML = "<p class='count'>No projects in the register yet.</p>";
+    return;
+  }
+  const [rb, ri] = await Promise.all([
+    api("reg_blocks?select=id,seq,kind,heading,is_items,header&project_id=eq."+PROJ.id+"&order=seq"),
+    api("reg_items?select=*&project_id=eq."+PROJ.id+"&order=seq")
+  ]);
+  if(!rb.ok || !ri.ok) throw new Error("cannot read the register (HTTP " + rb.status + "/" + ri.status + ")");
+  BLOCKS = await rb.json();
+  const bseq = {}; BLOCKS.forEach(b=>bseq[b.id]=b.seq);
+  const bhead = {}; BLOCKS.forEach(b=>bhead[b.id]=b.heading);
+  ITEMS = (await ri.json()).map(r=>({ ...r, _table: bhead[r.block_id] || "?" }));
+  ITEMS.sort((a,b)=> (bseq[a.block_id]-bseq[b.block_id]) || (a.seq-b.seq));
+  fill("#fStatus","status",[...new Set(ITEMS.map(statusOf))].sort());
+  fill("#fCat","category",[...new Set(ITEMS.map(r=>r.category).filter(Boolean))].sort());
+  fill("#fOrigin","origin",ORIGINS.filter(o=>ITEMS.some(r=>r.origin===o)),
+       [{value:"__none", label:"unset"}]);
+  fill("#fTable","table",[...new Set(ITEMS.map(r=>r._table))]);
+  buildIndexes();
+  render();
+}
+
+/* ---------- cross-references, DERIVED not stored ----------
+   The bodies already name each other in prose — "see S25", "closed by D9",
+   "subsumed by B14". Storing a link table would mean maintaining by hand what
+   the text already says, and it would go stale the first time nobody bothered.
+
+   ⚠ S-NUMBERS ARE AMBIGUOUS IN THIS REGISTER and the app must not pretend
+     otherwise. `S8` is both a spec item (criteria) and a session tag. Session
+     tags live in the `captured` COLUMN, never in prose, so scanning only the
+     body avoids most of it — but a sentence like "decided Session 8" that got
+     written "S8" would match wrongly. Chips therefore show the TARGET'S TITLE,
+     so a bad match is obvious on sight rather than trusted silently. */
+const TOKEN_RE = /\b(R\d{3,})\b|\b([SBD]\d{1,2}\+?)\b|\b(S-[a-z]+)\b/g;
+let SPEC_INDEX = {}, RID_INDEX = {}, MENTIONS = {};
+
+function tokensOf(r){
+  const out = new Set();
+  let m; TOKEN_RE.lastIndex = 0;
+  const text = bodyOf(r) + " " + (r.premise||"") + " " + (r.seebo_notes||"");
+  while((m = TOKEN_RE.exec(text)) !== null) out.add(m[1] || m[2] || m[3]);
+  // never let an item reference itself
+  out.delete(r.rid); if(r.spec_id) out.delete(r.spec_id);
+  return [...out];
+}
+
+function buildIndexes(){
+  SPEC_INDEX = {}; RID_INDEX = {}; MENTIONS = {};
+  ITEMS.forEach(r=>{
+    RID_INDEX[r.rid] = r;
+    if(r.spec_id) (SPEC_INDEX[r.spec_id] = SPEC_INDEX[r.spec_id] || []).push(r);
+  });
+  ITEMS.forEach(r=>{
+    tokensOf(r).forEach(t=>{ (MENTIONS[t] = MENTIONS[t] || []).push(r.rid); });
+  });
+}
+
+// what THIS item points at
+function refsOut(r){
+  const seen = new Set(), out = [];
+  tokensOf(r).forEach(t=>{
+    const targets = RID_INDEX[t] ? [RID_INDEX[t]] : (SPEC_INDEX[t] || []);
+    targets.forEach(x=>{ if(!seen.has(x.rid)){ seen.add(x.rid); out.push({tok:t, item:x}); } });
+  });
+  return out;
+}
+// what points at THIS item
+function refsIn(r){
+  const keys = [r.rid].concat(r.spec_id ? [r.spec_id] : []);
+  const seen = new Set(), out = [];
+  keys.forEach(k=>(MENTIONS[k]||[]).forEach(rid=>{
+    if(rid !== r.rid && !seen.has(rid)){ seen.add(rid); out.push({tok:k, item:RID_INDEX[rid]}); }
+  }));
+  return out;
+}
+function refBlock(list, emptyMsg){
+  const box = document.createElement("div");
+  if(!list.length){ box.className="count"; box.textContent = emptyMsg; return box; }
+  list.forEach(({tok, item})=>{
+    const c = document.createElement("span"); c.className="refchip";
+    c.innerHTML = "<span class='rl'>" + esc(item.rid) + "</span> " + esc(titleOf(item)).slice(0,58);
+    c.title = (tok !== item.rid ? "matched on “"+tok+"”  ·  " : "")
+            + (item.spec_id ? item.spec_id + "  ·  " : "") + item._table;
+    c.addEventListener("click", ()=>openItem(item.rid));
+    box.appendChild(c);
+  });
+  return box;
+}
+
+function render(){
+  if(MODE === "spec") return renderSpec();
+  const q=$("#q").value.trim().toLowerCase(), ft=$("#fType").value, fs=$("#fStatus").value,
+        fc=$("#fCat").value, fb=$("#fTable").value, fn=$("#fNotes").checked,
+        fo=$("#fOrigin").value, fsr=$("#fSrc").value;
+  const rows = ITEMS.filter(r=>{
+    if (ft === "__none" ? r.type : ft && r.type !== ft) return false;
+    if (fs && statusOf(r) !== fs) return false;
+    if (fc && (r.category||"") !== fc) return false;
+    if (fo === "__none" ? r.origin : fo && r.origin !== fo) return false;
+    if (fsr === "__has" && !r.original_instruction) return false;
+    if (fsr === "__pre" && r.source_ref !== "predates-archive") return false;
+    if (fsr === "__none" && (r.original_instruction || r.source_ref === "predates-archive")) return false;
+    if (fb && r._table !== fb) return false;
+    if (fn && !(r.seebo_notes||"").trim()) return false;
+    if (q && !((r.rid+" "+(r.spec_id||"")+" "+bodyOf(r)+" "+(r.seebo_notes||"")).toLowerCase().includes(q))) return false;
+    return true;
+  });
+  $("#count").textContent = rows.length + " of " + ITEMS.length;
+  renderSummary(rows);
+  const t=document.createElement("table");
+  t.innerHTML="<thead><tr><th style='width:30px'></th><th style='width:60px'>ID</th>"
+    +"<th style='width:92px'>Status</th><th style='width:58px'>Type</th>"
+    +"<th style='width:84px'>Origin</th>"
+    +"<th style='width:116px'>Captured</th>"
+    +"<th style='width:74px'>Spec</th><th>Item</th><th style='width:140px'>Table</th></tr></thead>";
+  const tb=document.createElement("tbody");
+  rows.forEach(r=>{
+    const tr=document.createElement("tr"); tr.dataset.rid=r.rid;
+    if(CUR===r.rid) tr.classList.add("sel");
+    if((r.seebo_notes||"").trim()) tr.classList.add("hasnote");
+    const st=statusOf(r);
+    tr.innerHTML="<td class='drag' draggable='true' title='drag to reorder'>⠿</td>"
+      +"<td class='id'>"+r.rid+"</td><td><span class='st "+st+"'>"+st+"</span></td>"
+      +"<td class='count'>"+(r.type||"—")+"</td><td class='count'>"+(r.origin||"—")+"</td>"
+      +"<td class='count cap"+(capturedText(r).exact?" exact":"")+"'>"+capturedText(r).text+"</td>"
+      +"<td class='count'>"+(r.spec_id||"")+"</td>"
+      +"<td class='title'><div class='t'></div><div class='b'></div></td>"
+      +"<td class='count'>"+r._table+"</td>";
+    tr.querySelector(".t").textContent = titleOf(r);
+    tr.querySelector(".b").textContent = strip(bodyOf(r)).slice(0,150)+"…";
+    tr.querySelector("td.title").addEventListener("click", ()=>openItem(r.rid));
+    wireDrag(tr, r);
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb); $("#wrap").innerHTML=""; $("#wrap").appendChild(t);
+}
+
+/* ---------- SPEC MODE ----------
+   Added 2026-09-22, toolkit R003. The spec used to live only as markdown in
+   each project's folder, so `reg_items.spec_id` pointed at something the app
+   could not show. Now spec_areas / spec_refs hold it, and a build item can be
+   created FROM a requirement with the ref already filled in.
+
+   THE SPEC FILES ARE STILL THE SOURCE. This view reads what import-spec.py
+   loaded; it does not write requirements back. Setting a status is still a
+   markdown edit followed by a re-import. R003's remaining half -- the exporter
+   writing spec\*.md -- is deliberately NOT built here, because it inverts which
+   side is authoritative, and that is a one-way door. */
+async function loadSpec(){
+  if(!PROJ) return;
+  const [ra, rr] = await Promise.all([
+    api("spec_areas?select=*&project_id=eq."+PROJ.id+"&order=sort_order"),
+    api("spec_refs?select=*&project_id=eq."+PROJ.id+"&order=ref")
+  ]);
+  if(!ra.ok || !rr.ok) throw new Error("cannot read the spec (HTTP "+ra.status+"/"+rr.status+")");
+  SPEC_AREAS = await ra.json();
+  SPEC_REFS  = await rr.json();
+}
+
+function setMode(m){
+  MODE = m;
+  const spec = m === "spec";
+  $("#mode").innerHTML = spec ? "&lsaquo; Register" : "Spec &rsaquo;";
+  ["#fType","#fStatus","#fOrigin","#fSrc","#fCat","#fTable"].forEach(function(sel){
+    $(sel).style.display = spec ? "none" : "";
+  });
+  $("#fSpecStatus").style.display = spec ? "" : "none";
+  $("#lQ").style.display = spec ? "" : "none";
+  $("#summary").innerHTML = "";
+  render();
+}
+
+function renderSpec(){
+  if(SPEC_AREAS === null){
+    $("#wrap").innerHTML = "<p class='count'>Loading the spec...</p>";
+    loadSpec().then(render).catch(function(e){ msg(e.message, "bad"); });
+    return;
+  }
+  if(!SPEC_REFS.length){
+    /* An empty spec and a spec that was never imported are different answers
+       (R17). Saying "no requirements" for the second would be a claim the
+       reader cannot check. */
+    $("#count").textContent = "";
+    $("#wrap").innerHTML = "<p class='count'>No spec rows for <b>"+esc(PROJ.slug)+"</b>. "
+      + "Either this project has no spec folder, or it has never been imported - "
+      + "run <code>import-spec.py " + esc(PROJ.slug) + " &lt;folder&gt;</code>.</p>";
+    return;
+  }
+  const q = $("#q").value.trim().toLowerCase();
+  const fs = $("#fSpecStatus").value, fq = $("#fQ").checked;
+  const rows = SPEC_REFS.filter(function(r){
+    if(fs && r.status !== fs) return false;
+    if(fq && !r.is_question) return false;
+    if(q && !((r.ref+" "+(r.title||"")+" "+(r.body||"")).toLowerCase().includes(q))) return false;
+    return true;
+  });
+  $("#count").textContent = rows.length + " of " + SPEC_REFS.length + " refs";
+
+  const cited = {};
+  ITEMS.forEach(function(i){ if(i.spec_id){ (cited[i.spec_id] = cited[i.spec_id] || []).push(i.rid); } });
+
+  const byArea = {};
+  rows.forEach(function(r){ (byArea[r.area_id] = byArea[r.area_id] || []).push(r); });
+
+  const wrap = document.createElement("div");
+  SPEC_AREAS.forEach(function(a){
+    const list = byArea[a.id];
+    if(!list || !list.length) return;
+    const h = document.createElement("h2");
+    h.className = "area";
+    h.innerHTML = "<span>"+esc(a.prefix)+"</span>"+esc(a.name)+" &middot; "+list.length+" ref(s)";
+    wrap.appendChild(h);
+    const t = document.createElement("table");
+    t.innerHTML = "<thead><tr><th style='width:74px'>Ref</th><th style='width:26px'></th>"
+      + "<th style='width:96px'>Status</th><th>Requirement</th>"
+      + "<th style='width:118px'>Cited by</th><th style='width:104px'></th></tr></thead>";
+    const tb = document.createElement("tbody");
+    list.forEach(function(r){
+      const tr = document.createElement("tr");
+      const by = cited[r.ref] || [];
+      tr.innerHTML = "<td class='id'>"+esc(r.ref)+"</td>"
+        + "<td class='qmark'>"+(r.is_question ? "?" : "")+"</td>"
+        + "<td><span class='sst "+esc(r.status)+"'>"+esc(r.status)+"</span></td>"
+        + "<td class='title'><div class='t'></div><div class='b'></div></td>"
+        + "<td class='count'>"+(by.length ? by.join(", ") : "-")+"</td>"
+        + "<td></td>";
+      tr.querySelector(".t").textContent = r.title || "";
+      tr.querySelector(".b").textContent = strip(r.body || "").slice(0,150) + "...";
+      /* Offered for a Confirmed ref, which is R003's wording: a requirement
+         becomes work once it has been ruled. Still offered where an item
+         exists, because one requirement can need several -- but the "cited by"
+         column shows what is already there first. */
+      if(r.status === "Confirmed"){
+        const b = document.createElement("button");
+        b.textContent = by.length ? "+ another" : "to build item";
+        b.title = "Create a register item citing " + r.ref;
+        b.addEventListener("click", function(){ convertRef(r); });
+        tr.lastElementChild.appendChild(b);
+      }
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb);
+    wrap.appendChild(t);
+  });
+  $("#wrap").innerHTML = "";
+  $("#wrap").appendChild(wrap);
+}
+
+/* Build the row's cells to EXACTLY the width of its block's header.
+   A row whose cells do not match its header used to be padded into place by
+   the markdown exporter, producing a table that parses perfectly and says the
+   wrong thing -- three live rows did exactly that until 2026-09-22. The
+   exporter now refuses. This is the other end of the same rule. */
+function cellsFor(header, rid, ref, title){
+  return (header || []).map(function(h){
+    const k = String(h).replace(/[`*]/g, "").trim().toLowerCase();
+    if(k === "id")       return "**" + rid + "**";
+    if(k === "spec_id")  return ref;
+    if(k === "item")     return "**" + title + "**";
+    if(k === "status")   return "open";
+    if(k === "why here") return "From spec ref " + ref;
+    if(k === "type")     return "work";
+    if(k === "captured") return new Date().toISOString().slice(0,10);
+    return "";
+  });
+}
+
+async function convertRef(r){
+  const blocks = BLOCKS.filter(function(b){ return b.is_items; });
+  const target = blocks.find(function(b){ return /next up/i.test(b.heading || ""); }) || blocks[0];
+  if(!target){ msg("This register has no table block to add an item to.", "bad"); return; }
+
+  /* THE DATABASE CANNOT TELL YOU THE NEXT ID, so this does not pretend to.
+     Harmony used R001-R015 and deleted them; reg_changes kept nothing, and it
+     has no project_id anyway. Computing max(live)+1 would REUSE a retired id
+     and break R3 silently. So the suggestion says where it came from, and the
+     person confirms it. */
+  let max = 0;
+  ITEMS.forEach(function(i){
+    const m = /^R(\d+)$/.exec(i.rid || "");
+    if(m) max = Math.max(max, +m[1]);
+  });
+  const suggested = "R" + String(max + 1).padStart(3, "0");
+  const rid = prompt(
+    "New register item for " + r.ref + "\n\n"
+    + "Suggested id: " + suggested + "   (highest LIVE id is "
+    + (max ? "R" + String(max).padStart(3, "0") : "none") + ")\n\n"
+    + "IDs are never reused (R3), and the database does NOT know about ids that\n"
+    + "were used and deleted - Harmony's R001-R015 are recorded only in its\n"
+    + "CLAUDE.md. Check before accepting this.",
+    suggested);
+  if(!rid) return;
+  if(ITEMS.some(function(i){ return i.rid === rid; })){
+    msg(rid + " already exists in this register.", "bad"); return;
+  }
+
+  let seq = 0;
+  ITEMS.forEach(function(i){ if(i.block_id === target.id) seq = Math.max(seq, (i.seq || 0)); });
+  const cells = cellsFor(target.header, rid, r.ref, r.title || r.ref);
+  /* IF THE HEADER IS ONE WE DO NOT UNDERSTAND, REFUSE -- do not create a row
+     of blanks. cellsFor maps by column NAME, so a block headed e.g.
+     "Design says / App does / Resolution" matches nothing and yields cells
+     that are correctly WIDE and entirely EMPTY: a row with its own id nowhere
+     in it. Found 2026-09-22 by running cellsFor against every real header in
+     the estate rather than only the one being built for. Padding was the bug
+     the exporter had; blanks are the same bug wearing a different hat. */
+  if(!cells.some(function(c){ return c.indexOf(rid) !== -1; })){
+    msg("Refusing: the block “" + (target.heading || "?") + "” has columns this app "
+      + "does not recognise (" + (target.header || []).join(" | ") + "), so the new row would "
+      + "be blank. Add the item in the register instead.", "bad");
+    return;
+  }
+  /* raw AS WELL AS cells: cct's register-render.py builds its markdown from
+     raw, the shared exporter builds it from cells. Writing one and not the
+     other leaves the row invisible in one of the two renderers. */
+  const row = {
+    project_id: PROJ.id, block_id: target.id, seq: seq + 1,
+    rid: rid, spec_id: r.ref, type: "work", status: "open",
+    origin: "planned", cells: cells,
+    raw: "| " + cells.join(" | ") + " |"
+  };
+  try{
+    await write("reg_items", { method: "POST", body: JSON.stringify(row) });
+    msg(rid + " created in " + (target.heading || "?") + ", citing " + r.ref + ".", "ok");
+    await loadRegister();
+    setMode("register");
+    openItem(rid);
+  }catch(e){ msg(e.message, "bad"); }
+}
+
+/* Summary of what is on screen, by capture date. Answers "when did this pile
+   accumulate", which a 211-row list cannot. Counts DAY-DATED and EXACT rows
+   together but says how many are approximate, so the number is not read as
+   more precise than it is. */
+function renderSummary(rows){
+  const box = $("#summary");
+  if(!rows.length){ box.innerHTML=""; return; }
+  const byDay = {};
+  let exact=0, undated=0;
+  rows.forEach(r=>{
+    const day = r.captured_at ? new Date(r.captured_at).toISOString().slice(0,10)
+              : r.captured_on || null;
+    if(!day){ undated++; return; }
+    if(r.captured_at) exact++;
+    byDay[day] = (byDay[day]||0)+1;
+  });
+  const days = Object.keys(byDay).sort();
+  if(!days.length){ box.innerHTML = "<span class='count'>"+undated+" undated</span>"; return; }
+  const max = Math.max(...days.map(d=>byDay[d]));
+  let html = "<span class='count'>captured:</span>";
+  days.forEach(d=>{
+    const n = byDay[d];
+    html += "<span class='sday' title='"+n+" item(s) captured "+d+"'>"
+          + "<span class='sbar' style='height:"+Math.max(3, Math.round(18*n/max))+"px'></span>"
+          + "<span class='sdl'>"+d.slice(5)+"</span><span class='sdn'>"+n+"</span></span>";
+  });
+  html += "<span class='count' style='margin-left:10px'>"
+       +  days.length+" day(s) · "+exact+" exact · "
+       +  (rows.length-exact-undated)+" day-only †"
+       +  (undated ? " · "+undated+" undated" : "") + "</span>";
+  box.innerHTML = html;
+}
+
+/* ---------- reorder ---------- */
+let dragRid=null;
+function wireDrag(tr, r){
+  tr.querySelector(".drag").addEventListener("dragstart", e=>{ dragRid=r.rid; e.dataTransfer.effectAllowed="move"; });
+  tr.addEventListener("dragover", e=>{ e.preventDefault(); tr.classList.add("dragover"); });
+  tr.addEventListener("dragleave", ()=>tr.classList.remove("dragover"));
+  tr.addEventListener("drop", async e=>{
+    e.preventDefault(); tr.classList.remove("dragover");
+    if(!dragRid || dragRid===r.rid) return;
+    const src=ITEMS.find(x=>x.rid===dragRid), dst=r;
+    // Order only means something inside one table. Refuse rather than do
+    // something surprising.
+    if(src.block_id !== dst.block_id){
+      msg("Can't move between tables — change its status instead.","dirty"); dragRid=null; return;
+    }
+    const group = ITEMS.filter(x=>x.block_id===src.block_id).sort((a,b)=>a.seq-b.seq);
+    group.splice(group.indexOf(dst), 0, group.splice(group.indexOf(src),1)[0]);
+    try{
+      msg("saving order…");
+      for(let i=0;i<group.length;i++){
+        if(group[i].seq === i) continue;
+        await write("reg_items?id=eq."+group[i].id, { method:"PATCH", body: JSON.stringify({ seq:i }) });
+        group[i].seq = i;
+      }
+      const bseq={}; BLOCKS.forEach(b=>bseq[b.id]=b.seq);
+      ITEMS.sort((a,b)=> (bseq[a.block_id]-bseq[b.block_id]) || (a.seq-b.seq));
+      msg("order saved","okmsg"); render();
+    }catch(err){ msg("NOT SAVED — "+err.message,"dirty"); await loadRegister(); }
+    dragRid=null;
+  });
+}
+
+/* ---------- edit ---------- */
+async function patch(item, field, value){
+  const before = item[field];
+  try{
+    const rows = await write("reg_items?id=eq."+item.id, { method:"PATCH", body: JSON.stringify({ [field]: value }) });
+    Object.assign(item, rows[0]);
+    msg("saved · " + field, "okmsg");
+    render();
+  }catch(e){
+    item[field] = before;                       // put the model back
+    msg("NOT SAVED — " + e.message, "dirty");
+  }
+}
+
+function lbl(t){ const e=document.createElement("label"); e.textContent=t; return e; }
+function fieldWrap(n,el){ const w=document.createElement("div"); w.appendChild(lbl(n)); w.appendChild(el); return w; }
+function sel(opts,val,on){
+  const s=document.createElement("select");
+  opts.forEach(o=>{ const x=document.createElement("option"); x.value=o; x.textContent=o||"— none —"; s.appendChild(x); });
+  s.value=val||""; s.addEventListener("change",()=>on(s.value)); return s;
+}
+function ta(val,on,ph){
+  const t=document.createElement("textarea"); t.value=val; t.placeholder=ph||"";
+  t.addEventListener("change",()=>on(t.value)); return t;
+}
+
+async function openItem(rid){
+  CUR = rid;
+  const r = ITEMS.find(x=>x.rid===rid);
+  const d = $("#drawer"); d.classList.add("on"); d.innerHTML="";
+  const h=document.createElement("h2"); h.textContent = r.rid + (r.spec_id ? "  ·  "+r.spec_id : "");
+  const sub=document.createElement("div"); sub.className="sub";
+  sub.textContent = r._table + (r.captured ? "  ·  captured "+r.captured : "");
+  d.appendChild(h); d.appendChild(sub);
+
+  d.appendChild(lbl("Item"));
+  const body=document.createElement("div"); body.className="body"; body.textContent=strip(bodyOf(r));
+  d.appendChild(body);
+
+  d.appendChild(lbl("Original request"));
+  if(r.original_instruction){
+    const oi=document.createElement("div"); oi.className="body"; oi.textContent=r.original_instruction;
+    d.appendChild(oi);
+    if(r.source_ref){
+      const sr=document.createElement("div"); sr.className="refnote";
+      sr.textContent = "source: " + r.source_ref;
+      d.appendChild(sr);
+    }
+  } else if(r.source_ref === "predates-archive"){
+    /* Recording "there is nothing to find" is worth as much as a pointer —
+       it stops the next person searching an archive that cannot contain it. */
+    const w=document.createElement("div"); w.className="warn";
+    w.textContent="No transcript exists. This item was captured in Session 5–8, which ran in "
+                + "Cowork; Claude Code only began recording transcripts on 2026-08-30. "
+                + "Not missing — unrecordable.";
+    d.appendChild(w);
+  } else {
+    const w=document.createElement("div"); w.className="warn";
+    w.textContent="Not traced yet. A transcript covering this session exists — ask Claude to "
+                + "trace it. It is left empty rather than reconstructed, because an invented "
+                + "instruction reads exactly like a real one.";
+    d.appendChild(w);
+  }
+
+  const two=document.createElement("div"); two.className="row2";
+  two.appendChild(fieldWrap("Status", sel(["",...STATUSES], r.status||"", v=>patch(r,"status",v||null))));
+  two.appendChild(fieldWrap("Type",   sel(["","work","record"], r.type||"", v=>patch(r,"type",v||null))));
+  d.appendChild(two);
+
+  const two2=document.createElement("div"); two2.className="row2";
+  two2.appendChild(fieldWrap("Origin — where it came from",
+    sel(["",...ORIGINS], r.origin||"", v=>patch(r,"origin",v||null))));
+  two2.appendChild(fieldWrap("Category — what part of the project",
+    sel(["", ...[...new Set(ITEMS.map(x=>x.category).filter(Boolean))].sort()],
+        r.category||"", v=>patch(r,"category",v||null))));
+  d.appendChild(two2);
+  if(r.origin && ORIGIN_HELP[r.origin]){
+    const h=document.createElement("div"); h.className="refnote";
+    h.textContent = r.origin + " — " + ORIGIN_HELP[r.origin];
+    d.appendChild(h);
+  }
+
+  d.appendChild(lbl("Premise — what must stay true for this to still matter"));
+  d.appendChild(ta(r.premise||"", v=>patch(r,"premise",v||null),
+    "e.g. “Node is not installed”. When that stops being true, this item has expired."));
+
+  d.appendChild(lbl("My notes for Claude"));
+  d.appendChild(ta(r.seebo_notes||"", v=>patch(r,"seebo_notes",v||""),
+    "Questions or detail for Claude. Claude reads this and never overwrites it."));
+
+  const out_ = refsOut(r), in_ = refsIn(r);
+  d.appendChild(lbl("References (" + out_.length + ") — items this one points at"));
+  d.appendChild(refBlock(out_, "None found in the text."));
+  d.appendChild(lbl("Referenced by (" + in_.length + ")"));
+  d.appendChild(refBlock(in_, "Nothing points at this one."));
+  if(out_.length || in_.length){
+    const n=document.createElement("div"); n.className="refnote";
+    n.textContent = "Derived from the text, not stored. Hover a chip to see what it matched on — "
+                  + "S-numbers can collide with session tags, so check before relying on one.";
+    d.appendChild(n);
+  }
+
+  d.appendChild(lbl("Changelog"));
+  const holder=document.createElement("div"); d.appendChild(holder);
+  holder.innerHTML = "<div class='count'>loading…</div>";
+
+  const closeBtn=document.createElement("button");
+  closeBtn.textContent="Close"; closeBtn.style.marginTop="18px";
+  closeBtn.addEventListener("click", ()=>{ d.classList.remove("on"); CUR=null; render(); });
+  d.appendChild(closeBtn);
+
+  /* ⚠ FILTER ON item_id, NEVER ON rid. `rid` is unique PER PROJECT — R002
+     exists in every project independently, which is the whole point of it.
+     This queried by rid, so opening Sourdough's R002 showed five rows of
+     CCT's R002 history and none of its own. Measured 2026-09-03, the day a
+     second project first existed. `item_id` is a uuid and is global.
+
+     Same shape as the multi-project bug found the same morning: the code
+     was wrong from the day `24` shipped and could not be seen while there
+     was one project to look at. */
+  const cr = await api("reg_changes?select=*&item_id=eq."+encodeURIComponent(r.id)
+                       +"&order=changed_at.desc&limit=60");
+  let rows=[]; try{ rows = cr.ok ? await cr.json() : []; }catch(e){}
+  holder.innerHTML = "";
+  if(!rows.length){
+    holder.innerHTML = "<div class='count'>No changes recorded yet.</div>";
+  } else {
+    rows.forEach(c=>{
+      const el=document.createElement("div"); el.className="chg";
+      el.innerHTML = "<b>"+esc(c.field)+"</b> · " + c.changed_at.replace("T"," ").slice(0,16)
+                   + " · " + esc(c.who) + "<br>" + esc(c.old_value) + " → " + esc(c.new_value);
+      holder.appendChild(el);
+    });
+  }
+  render();
+}
+
+/* ---------- sign-in ---------- */
+function showLogin(err){
+  $("#login").style.display="flex";
+  $("#li_err").textContent = err || "";
+  $("#li_em").focus();
+}
+$("#li_go").addEventListener("click", async ()=>{
+  const b=$("#li_go"); b.disabled=true; $("#li_err").textContent="";
+  try{
+    await signIn($("#li_em").value.trim(), $("#li_pw").value);
+    $("#li_pw").value=""; $("#login").style.display="none";
+    await start();
+  }catch(e){ $("#li_err").textContent = e.message; }
+  b.disabled=false;
+});
+$("#li_pw").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#li_go").click(); });
+$("#out").addEventListener("click", ()=>{ saveSession(null); location.reload(); });
+
+$("#proj").addEventListener("change", async ()=>{
+  PROJ = PROJECTS.find(p=>p.id===$("#proj").value);
+  if(PROJ) store.set("cct.register.proj", PROJ.id);
+  syncHowto();
+  CUR=null; $("#drawer").classList.remove("on");
+  try{ await loadRegister(); }catch(e){ msg(e.message,"dirty"); }
+});
+$("#reload").addEventListener("click", async ()=>{
+  try{ await loadRegister(); msg("reloaded","okmsg"); }catch(e){ msg(e.message,"dirty"); }
+});
+$("#mode").addEventListener("click", ()=> setMode(MODE === "spec" ? "register" : "spec"));
+["#q","#fType","#fStatus","#fCat","#fOrigin","#fSrc","#fTable","#fNotes","#fSpecStatus","#fQ"].forEach(s=>{
+  $(s).addEventListener("input", render); $(s).addEventListener("change", render);
+});
+document.addEventListener("keydown", e=>{
+  if(e.key==="/" && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)){ e.preventDefault(); $("#q").focus(); }
+  if(e.key==="Escape"){ $("#drawer").classList.remove("on"); CUR=null; render(); }
+});
+
+async function start(){
+  try{
+    await loadProjects();
+    $("#who").textContent = (SESSION && SESSION.user && SESSION.user.email) || "";
+    await loadRegister();
+  }catch(e){
+    // A read failure here is almost always the POLICY saying no, not the
+    // network. Say which, rather than showing an empty page and letting the
+    // reader conclude the register is empty.
+    msg("Could not load: " + e.message + " — is this account an admin?", "dirty");
+  }
+}
+
+loadSession();
+if(SESSION && SESSION.access_token) start(); else showLogin();
+</script>

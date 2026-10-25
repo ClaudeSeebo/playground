@@ -10,13 +10,26 @@
     --accent:#2f4fb0; --accent-soft:#eaeef9; --ok:#1b7f4b; --okbg:#e7f4ec;
     --bad:#b3261e; --badbg:#fbeae9; --none:#c9c9c4;
     --leaf:#33689a; --optional:#9a7133;
-  }
+  
+    /* theme surfaces and tints (dark mode, 2026-10-24) — light values are the
+       exact colours they replaced, so light mode renders as before */
+    --surface:#fff; --surface-2:#fafafa; --ink-2:#333; --on-accent:#fff; --accent-strong:#0b3ea8;
+    --chart-empty:#f0f0ee; --alias-bg:#cfe6c6; --alias-bg-sel:#bcdcb0; --leaf-bg:#e7eff7;
+    --data-bg:#fbf3e2; --data-bg-sel:#f6e8c8; --data-ink:#7a5c12; --data-line:#f2e4c4; --data-line-hover:#e0cb96;
+    --other-bg:#fbf3e2; --other-tick:#8a7a4e; --mine-bg:#eaf3fb;
+    --hold-bg:#fff0e0; --warn-ink:#8a5a00; --mark-bg:#fdf0c2;
+    --kid-bg:#dbe4f8; --kid-line:#c6d3f0; --kid-bg-hover:#cbd8f4;
+    --note-line:#c77700; --note-bg:#fff5e6;
+    --agent:#3b5bdb; --agent-ink:#24399b; --agent-bg:#eef3ff;
+    --box-line:#cfd3dc; --box-ink:#98a0ad;
+    color-scheme:light;
+}
   *{ box-sizing:border-box; }
   html,body{ margin:0; height:100%; }
   body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    color:var(--ink); display:flex; flex-direction:column; height:100vh; }
+    color:var(--ink); background:var(--surface); display:flex; flex-direction:column; height:100vh; }
 
-  header{ display:flex; align-items:center; gap:18px; padding:10px 18px; border-bottom:1px solid var(--line); background:#fff; flex:none; }
+  header{ display:flex; align-items:center; gap:18px; padding:10px 18px; border-bottom:1px solid var(--line); background:var(--surface); flex:none; }
   .brand{ font-weight:800; letter-spacing:.02em; font-size:16px; }
   .modes{ display:flex; gap:4px; }
   .mode{ font:inherit; font-size:13px; font-weight:600; border:0; background:transparent; color:var(--muted);
@@ -40,7 +53,7 @@
     padding:5px 11px; border-radius:20px; }
   .savestate .sdot{ width:8px; height:8px; border-radius:50%; }
   .savestate.saved{ background:var(--okbg); color:var(--ok); } .savestate.saved .sdot{ background:var(--ok); }
-  .savestate.saving{ background:#e8eef9; color:var(--accent); } .savestate.saving .sdot{ background:var(--accent); animation:pulse 1s infinite; }
+  .savestate.saving{ background:var(--accent-soft); color:var(--accent); } .savestate.saving .sdot{ background:var(--accent); animation:pulse 1s infinite; }
   .savestate.failed{ background:var(--badbg); color:var(--bad); } .savestate.failed .sdot{ background:var(--bad); }
   @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.3;} }
   /* brief confirmation glow after a save lands */
@@ -50,7 +63,7 @@
     35%{ transform:scale(1); }
     100%{ box-shadow:0 0 0 12px rgba(27,127,75,0); transform:scale(1); }
   }
-  .savestate .retry{ margin-left:6px; font:inherit; font-size:11px; font-weight:700; border:0; background:var(--bad); color:#fff; border-radius:5px; padding:2px 7px; cursor:pointer; display:none; }
+  .savestate .retry{ margin-left:6px; font:inherit; font-size:11px; font-weight:700; border:0; background:var(--bad); color:var(--on-accent); border-radius:5px; padding:2px 7px; cursor:pointer; display:none; }
   .savestate.failed .retry{ display:inline-block; }
 
   /* project zone: visually separated on the right, its own labeled group */
@@ -66,7 +79,7 @@
   .lefthead{ display:flex; align-items:center; gap:8px; margin:4px 6px 10px; }
   .lefthead .ttl{ font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
   .lefthead .sys{ margin-left:auto; }
-  select,input,textarea{ font:inherit; font-size:14px; padding:7px 9px; border:1px solid var(--line); border-radius:7px; background:#fff; color:var(--ink); }
+  select,input,textarea{ font:inherit; font-size:14px; padding:7px 9px; border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--ink); }
   select.sys{ font-size:12px; padding:4px 6px; }
 
   ul.tree, ul.tree ul{ list-style:none; margin:0; padding:0; }
@@ -84,17 +97,17 @@
      tell a translated name from an untranslated one, and you would quote a
      term the vendor has never used. */
   .aliasbtn{ font:inherit; font-size:11.5px; font-weight:700; margin-left:auto;
-    border:1px solid var(--line); background:#fff; color:var(--muted);
+    border:1px solid var(--line); background:var(--surface); color:var(--muted);
     border-radius:20px; padding:3px 10px; cursor:pointer; white-space:nowrap; }
   .aliasbtn:hover{ border-color:var(--accent); color:var(--accent); }
   .aliasbtn.on{ background:var(--accent-soft); border-color:var(--accent); color:var(--accent); }
   .lefthead .aliasbtn + .sys{ margin-left:6px; }
-  .tn .nm.aliased{ background:#cfe6c6; box-shadow:0 0 0 3px #cfe6c6; border-radius:4px; }
-  .tn.sel .nm.aliased{ background:#bcdcb0; box-shadow:0 0 0 3px #bcdcb0; }
+  .tn .nm.aliased{ background:var(--alias-bg); box-shadow:0 0 0 3px var(--alias-bg); border-radius:4px; }
+  .tn.sel .nm.aliased{ background:var(--alias-bg-sel); box-shadow:0 0 0 3px var(--alias-bg-sel); }
   .aliasnone{ font-size:11px; color:var(--muted); font-style:italic; margin-left:6px; }
   .tn .mini{ font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; padding:0 4px; border-radius:10px; flex:none;
     background:var(--accent-soft); color:var(--accent); }
-  .mini.leaf{ background:#e7eff7; color:var(--leaf);}
+  .mini.leaf{ background:var(--leaf-bg); color:var(--leaf);}
   /* .mini.opt removed 2026-08-30 with the Essential checkbox — nothing renders it. */
   /* Data elements read as a CREAM FIELD rather than a badge: the whole row is
      tinted, borderless, so a block of them is one visual group instead of a
@@ -102,34 +115,34 @@
      project uses it — the swatch still owns saturated colour, which is the
      signal a room actually reads. Replaced a violet pill plus a left bracket,
      which said the same thing twice and competed with the swatch. */
-  .tn.datarow{ background:#fbf3e2; border-radius:6px; }
-  .tn.datarow.sel{ background:#f6e8c8; }
-  .npill.kid.datakid{ background:#fbf3e2; color:#7a5c12; border:1px solid #f2e4c4; }
-  .npill.kid.datakid:hover{ background:#f6e8c8; border-color:#e0cb96; }
+  .tn.datarow{ background:var(--data-bg); border-radius:6px; }
+  .tn.datarow.sel{ background:var(--data-bg-sel); }
+  .npill.kid.datakid{ background:var(--data-bg); color:var(--data-ink); border:1px solid var(--data-line); }
+  .npill.kid.datakid:hover{ background:var(--data-bg-sel); border-color:var(--data-line-hover); }
   .datatag{ display:inline-block; font-size:11px; font-weight:700; text-transform:uppercase;
             letter-spacing:.04em; padding:2px 8px; border-radius:10px;
-            background:#fbf3e2; color:#7a5c12; margin-bottom:8px; }
-  .addbtn.dataadd{ color:#7a5c12; border-color:#f2e4c4; }
-  .addbtn.dataadd:hover:not(:disabled){ background:#fbf3e2; }
+            background:var(--data-bg); color:var(--data-ink); margin-bottom:8px; }
+  .addbtn.dataadd{ color:var(--data-ink); border-color:var(--data-line); }
+  .addbtn.dataadd:hover:not(:disabled){ background:var(--data-bg); }
   .addbtn.addoff{ opacity:.35; cursor:not-allowed; }
   .addbtn.addoff:hover{ background:transparent; }
   .ordctl{ display:flex; gap:2px; margin-left:6px; }
   .ordbtn{ font:inherit; font-size:10px; line-height:1; padding:3px 5px; cursor:pointer;
-           border:1px solid var(--line); background:#fff; color:var(--muted); border-radius:4px; }
+           border:1px solid var(--line); background:var(--surface); color:var(--muted); border-radius:4px; }
   .ordbtn:hover:not(:disabled){ background:var(--paper); color:var(--ink); }
   .ordbtn:disabled{ opacity:.3; cursor:default; }
   .mini.rdy{ background:var(--okbg); color:var(--ok); }
-  .mini.hold{ background:#fff0e0; color:#8a5a00; }
-  table.matrix td.heldcell{ background:#fafafa; }
+  .mini.hold{ background:var(--hold-bg); color:var(--warn-ink); }
+  table.matrix td.heldcell{ background:var(--surface-2); }
   table.matrix td.mname.heldname .mnm{ color:var(--muted); }
   .heldtag{ font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em;
-    background:#fff0e0; color:#8a5a00; padding:0 5px; border-radius:10px; margin-left:6px; }
+    background:var(--hold-bg); color:var(--warn-ink); padding:0 5px; border-radius:10px; margin-left:6px; }
   .caret{ width:12px; text-align:center; color:var(--muted); flex:none; cursor:pointer; font-size:11px; user-select:none; }
 
   .addbar{ display:flex; gap:6px; margin:6px; padding-top:8px; border-top:1px dashed var(--line); }
   .addbar input{ flex:1; font-size:13px; }
-  .addbar button, .btn{ font:inherit; font-size:13px; font-weight:600; background:var(--accent); color:#fff; border:0; border-radius:7px; padding:7px 12px; cursor:pointer; }
-  .btn.ghost{ background:#fff; color:var(--accent); border:1px solid var(--accent); }
+  .addbar button, .btn{ font:inherit; font-size:13px; font-weight:600; background:var(--accent); color:var(--on-accent); border:0; border-radius:7px; padding:7px 12px; cursor:pointer; }
+  .btn.ghost{ background:var(--surface); color:var(--accent); border:1px solid var(--accent); }
   .btn.sm{ padding:5px 9px; font-size:12px; }
   .btn:disabled{ opacity:.5; cursor:default; }
 
@@ -152,14 +165,14 @@
   .searchwrap{ position:relative; margin:0 6px 8px; }
   .searchwrap input{ width:100%; font-size:13px; padding:6px 9px; }
   .sresults{ display:none; position:absolute; left:0; right:0; top:100%; z-index:20; margin-top:3px;
-    background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,.10);
+    background:var(--surface); border:1px solid var(--line); border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,.10);
     max-height:300px; overflow:auto; }
   .sresults.open{ display:block; }
   .sres{ padding:6px 9px; cursor:pointer; border-bottom:1px solid var(--paper); }
   .sres:last-child{ border-bottom:0; }
   .sres.active, .sres:hover{ background:var(--accent-soft); }
   .sres .sname{ font-size:13px; font-weight:600; display:block; }
-  .sres .sname mark{ background:#fdf0c2; color:inherit; padding:0 1px; border-radius:2px; }
+  .sres .sname mark{ background:var(--mark-bg); color:inherit; padding:0 1px; border-radius:2px; }
   .sres .spath{ font-size:11px; color:var(--muted); display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .snone{ padding:8px 9px; font-size:12px; color:var(--muted); font-style:italic; }
 
@@ -167,11 +180,11 @@
   .navstrip{ display:flex; align-items:flex-start; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
   .npill{ font:inherit; font-size:13px; font-weight:600; border-radius:20px; padding:6px 14px;
     max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .npill.anc{ border:1px solid var(--line); background:#fff; color:var(--ink); cursor:pointer; }
+  .npill.anc{ border:1px solid var(--line); background:var(--surface); color:var(--ink); cursor:pointer; }
   .npill.anc:hover{ border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
-  .npill.cur{ background:var(--accent); color:#fff; border:1px solid var(--accent); cursor:default; }
-  .npill.kid{ background:#dbe4f8; color:var(--accent); border:1px solid #c6d3f0; cursor:pointer; font-size:12.5px; padding:5px 12px; }
-  .npill.kid:hover{ background:#cbd8f4; border-color:var(--accent); }
+  .npill.cur{ background:var(--accent); color:var(--on-accent); border:1px solid var(--accent); cursor:default; }
+  .npill.kid{ background:var(--kid-bg); color:var(--accent); border:1px solid var(--kid-line); cursor:pointer; font-size:12.5px; padding:5px 12px; }
+  .npill.kid:hover{ background:var(--kid-bg-hover); border-color:var(--accent); }
   .nsep{ color:var(--none); font-size:15px; line-height:32px; }
   .curcol{ display:flex; flex-direction:column; align-items:flex-start; gap:7px; }
   .currow{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
@@ -186,24 +199,43 @@
 
   /* multi-line paste preview (S14) */
   .pv-list{ display:flex; flex-wrap:wrap; gap:6px; max-height:240px; overflow:auto;
-    padding:10px; border:1px solid var(--line); border-radius:8px; background:#fafbfd; margin-bottom:12px; }
-  .pv-item{ font-size:13px; background:#fff; border:1px solid var(--line); border-radius:20px; padding:4px 11px; }
+    padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--surface-2); margin-bottom:12px; }
+  .pv-item{ font-size:13px; background:var(--surface); border:1px solid var(--line); border-radius:20px; padding:4px 11px; }
   .pv-more{ font-size:12.5px; color:var(--muted); align-self:center; padding:4px 6px; font-style:italic; }
   .pv-note{ font-size:12.5px; line-height:1.5; margin-bottom:7px; }
-  .pv-note.warn{ color:#8a5a00; } .pv-note.info{ color:var(--muted); }
+  .pv-note.warn{ color:var(--warn-ink); } .pv-note.info{ color:var(--muted); }
   .pv-big{ font-size:13px; font-weight:700; color:var(--bad); margin-bottom:10px; }
   .pv-bar{ display:flex; gap:8px; margin-top:16px; }
 
   /* notes to administrator (B14) */
-  .notebtn{ font:inherit; font-size:12px; line-height:1; border:1px solid var(--line); background:#fff;
+  .notebtn{ font:inherit; font-size:12px; line-height:1; border:1px solid var(--line); background:var(--surface);
     color:var(--muted); border-radius:6px; padding:2px 6px; cursor:pointer; margin-left:6px; }
   .notebtn:hover{ color:var(--accent); border-color:var(--accent); background:var(--accent-soft); }
-  .notedot{ color:#c77700; font-size:10px; margin-left:5px; vertical-align:middle; }
-  #notesbtn.hasnotes{ background:#fff5e6; border-color:#c77700; color:#8a5a00; }
+  .notedot{ color:var(--note-line); font-size:10px; margin-left:5px; vertical-align:middle; }
+  #notesbtn.hasnotes{ background:var(--note-bg); border-color:var(--note-line); color:var(--warn-ink); }
+  /* R217 — the agent. Blue throughout, so it never reads as a human's mark. */
+  #agentbtn.hasq{ background:var(--agent-bg); border-color:var(--agent); color:var(--agent-ink); }
+  .agentq{ color:var(--agent); font-size:10px; font-weight:700; margin-left:5px; vertical-align:middle; }
+  .agentchip{ position:absolute; bottom:1px; right:2px; font-size:9px; line-height:1; padding:1px 3px;
+              border-radius:3px; border:1px dashed var(--agent); color:var(--agent-ink); background:var(--surface); cursor:help; }
+  .qcard{ border:1px solid var(--line); border-radius:6px; padding:8px 10px; margin-bottom:10px; }
+  .qcard.done{ opacity:.8; }
+  .qtext{ margin:6px 0 8px; }
+  .qopts{ display:flex; flex-direction:column; gap:5px; }
+  .qopt{ text-align:left; border:1px solid var(--line); background:var(--surface); border-radius:5px; padding:5px 8px; cursor:pointer; font:inherit; }
+  .qopt.rec{ border-color:var(--agent); }
+  .qopt.chosen{ background:var(--agent); border-color:var(--agent); color:var(--on-accent); }
+  .qopt[disabled]{ cursor:default; }
+  .qopt .recmark{ font-size:10px; font-weight:700; color:var(--agent-ink); margin-left:6px; }
+  .qopt.chosen .recmark{ color:var(--on-accent); }
+  .qopt .qdetail{ display:block; font-size:11px; opacity:.75; margin-top:2px; }
+  .wakestat{ font-size:12px; margin-top:6px; }
+  .wakestat.ok{ color:var(--ok); } .wakestat.bad{ color:var(--bad); }
+  .agenttag{ background:var(--agent-bg); color:var(--agent-ink); border:1px solid var(--agent); }
   .notearea{ width:100%; font:inherit; font-size:13.5px; padding:9px 11px; border:1px solid var(--line);
     border-radius:8px; resize:vertical; margin:10px 0 8px; }
-  .notecard{ border:1px solid var(--line); border-left:3px solid #c77700; border-radius:8px;
-    padding:10px 12px; margin-bottom:10px; background:#fff; }
+  .notecard{ border:1px solid var(--line); border-left:3px solid var(--note-line); border-radius:8px;
+    padding:10px 12px; margin-bottom:10px; background:var(--surface); }
   .notecard.done{ border-left-color:var(--line); opacity:.62; }
   .notehead{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
   .notelink{ font:inherit; font-size:12.5px; font-weight:700; color:var(--accent); background:transparent;
@@ -216,13 +248,13 @@
   .matrix .cell{ position:relative; }
   .shotfold{ position:absolute; top:2px; right:3px; width:0; height:0;
     border-top:9px solid var(--accent); border-left:9px solid transparent; cursor:pointer; }
-  .shotfold:hover{ border-top-color:#0b3ea8; }
+  .shotfold:hover{ border-top-color:var(--accent-strong); }
   .shotmark{ color:var(--accent); font-size:10px; margin-left:5px; vertical-align:middle; }
-  .shotbtn{ font:inherit; font-size:12px; line-height:1; border:1px solid var(--line); background:#fff;
+  .shotbtn{ font:inherit; font-size:12px; line-height:1; border:1px solid var(--line); background:var(--surface);
     color:var(--muted); border-radius:6px; padding:2px 6px; cursor:pointer; margin-left:5px; }
   .shotbtn:hover{ color:var(--accent); border-color:var(--accent); background:var(--accent-soft); }
   .shotgrid{ display:flex; flex-wrap:wrap; gap:10px; margin:8px 0 12px; }
-  .shotcard{ width:150px; border:1px solid var(--line); border-radius:8px; padding:7px; background:#fff; }
+  .shotcard{ width:150px; border:1px solid var(--line); border-radius:8px; padding:7px; background:var(--surface); }
   .shotcard img{ width:100%; height:86px; object-fit:cover; border-radius:5px; cursor:zoom-in; display:block; }
   .shotmeta{ font-size:11.5px; color:var(--muted); margin:5px 0 6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .shotadd{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:8px; max-width:660px; }
@@ -246,7 +278,7 @@
 
   /* aliases */
   .aliaslist{ display:flex; flex-direction:column; gap:6px; }
-  .aliasrow{ display:flex; align-items:center; gap:10px; padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  .aliasrow{ display:flex; align-items:center; gap:10px; padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:var(--surface); }
   .acode{ font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:700; letter-spacing:.04em;
     background:var(--paper); border:1px solid var(--line); border-radius:5px; padding:2px 7px; flex:none; cursor:help; }
   .amid{ flex:1; min-width:0; }
@@ -258,7 +290,7 @@
   /* stale ratings */
   .cell.stalecell{ position:relative; }
   .staleflag{ position:absolute; top:1px; right:2px; font-size:10px; font-weight:800; line-height:1;
-    color:#fff; background:var(--optional); border-radius:50%; width:13px; height:13px;
+    color:var(--on-accent); background:var(--optional); border-radius:50%; width:13px; height:13px;
     display:flex; align-items:center; justify-content:center; cursor:help; z-index:1; }
 
   /* ===================================================================
@@ -268,14 +300,14 @@
      box per scale value: F P W N. Click to set, click again to clear.
      =================================================================== */
   .box{ display:inline-flex; align-items:center; justify-content:center;
-        width:20px; height:20px; border-radius:5px; border:1px solid #cfd3dc;
-        font-size:11px; font-weight:800; background:#fff; color:#98a0ad;
+        width:20px; height:20px; border-radius:5px; border:1px solid var(--box-line);
+        font-size:11px; font-weight:800; background:var(--surface); color:var(--box-ink);
         cursor:pointer; user-select:none; }
   .box + .box{ margin-left:3px; }
   .box:hover{ border-color:var(--accent); color:var(--accent); }
   .box.on{ border-color:rgba(0,0,0,.28); box-shadow:inset 0 0 0 1px rgba(0,0,0,.06); }
   .box.off{ cursor:not-allowed; opacity:.4; }
-  .box.off:hover{ border-color:#cfd3dc; color:#98a0ad; }
+  .box.off:hover{ border-color:var(--box-line); color:var(--box-ink); }
   .boxgrp{ display:inline-flex; align-items:center; white-space:nowrap; }
 
   /* two-row header: system, then its channels beneath */
@@ -295,10 +327,10 @@
      nowhere to put "whose is this" except a fiddly corner mark. Now the two
      never compete.
         blue  = yours       cream = somebody else's      white = unrated  */
-  td.cell{ padding:3px 6px; text-align:center; white-space:nowrap; background:#fff; }
-  td.cell.minecell { background:#eaf3fb; }
-  td.cell.othercell{ background:#fbf3e2; }
-  .othertick{ font-size:10px; line-height:1; color:#8a7a4e; margin-left:5px;
+  td.cell{ padding:3px 6px; text-align:center; white-space:nowrap; background:var(--surface); }
+  td.cell.minecell { background:var(--mine-bg); }
+  td.cell.othercell{ background:var(--other-bg); }
+  .othertick{ font-size:10px; line-height:1; color:var(--other-tick); margin-left:5px;
               cursor:help; vertical-align:middle; }
 
   /* channel editor in Settings -> Systems */
@@ -371,12 +403,12 @@
   table.matrix{ border-collapse:collapse; font-size:13px; }
   table.matrix th, table.matrix td{ border:1px solid var(--line); }
   table.matrix th.gut{ width:66px; min-width:66px; background:var(--paper); position:sticky; left:0; z-index:3; }
-  table.matrix td.gut{ width:66px; min-width:66px; background:#fff; position:sticky; left:0; z-index:2;
+  table.matrix td.gut{ width:66px; min-width:66px; background:var(--surface); position:sticky; left:0; z-index:2;
     padding:4px 6px; text-align:center; white-space:nowrap; }
   table.matrix td.gut .notebtn, table.matrix td.gut .shotbtn{ margin:0 1px; padding:2px 5px; }
   table.matrix th.corner{ text-align:left; padding:8px 10px; background:var(--paper); position:sticky; left:66px; z-index:2; min-width:240px; }
   table.matrix th.syscol{ padding:8px 10px; background:var(--paper); font-family:ui-monospace,Menlo,monospace; font-size:12px; letter-spacing:.03em; min-width:70px; cursor:help; }
-  table.matrix td.mname{ text-align:left; padding:6px 10px; background:#fff; position:sticky; left:66px; z-index:1; white-space:nowrap; }
+  table.matrix td.mname{ text-align:left; padding:6px 10px; background:var(--surface); position:sticky; left:66px; z-index:1; white-space:nowrap; }
   table.matrix td.mname.depth1{ padding-left:24px; } table.matrix td.mname.depth2{ padding-left:40px; }
   table.matrix td.mname.depth3{ padding-left:56px; } table.matrix td.mname.depth4{ padding-left:72px; }
   table.matrix td.mname .mnm{ font-weight:600; }
@@ -386,18 +418,18 @@
   /* chart controls + multi-system grid */
   .chartctl{ display:flex; align-items:center; gap:14px; margin:2px 0 14px; }
   .seg{ display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
-  .seg button{ font:inherit; font-size:12.5px; font-weight:600; border:0; background:#fff; color:var(--muted); padding:6px 14px; cursor:pointer; }
+  .seg button{ font:inherit; font-size:12.5px; font-weight:600; border:0; background:var(--surface); color:var(--muted); padding:6px 14px; cursor:pointer; }
   .seg button.on{ background:var(--accent-soft); color:var(--accent); }
   .hcard.multi{ min-width:150px; max-width:none; width:max-content; }
   .sysgrid{ display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
   .syscell{ display:inline-flex; align-items:center; gap:3px; padding:2px 6px; border-radius:5px; border:1px solid rgba(0,0,0,.06); }
-  .syscell .sccode{ font-family:ui-monospace,Menlo,monospace; font-size:10.5px; font-weight:700; color:#333; }
-  .syscell .scnum{ font-size:12px; font-weight:800; color:#222; }
+  .syscell .sccode{ font-family:ui-monospace,Menlo,monospace; font-size:10.5px; font-weight:700; color:var(--ink-2); }
+  .syscell .scnum{ font-size:12px; font-weight:800; color:var(--ink); }
 
   /* modal overlay for settings */
   .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.35); display:flex; align-items:flex-start; justify-content:center; padding-top:60px; z-index:100; }
-  .modal{ background:#fff; border-radius:12px; width:560px; max-width:92vw; max-height:80vh; overflow:auto; box-shadow:0 12px 40px rgba(0,0,0,.25); }
-  .modal .mhead{ display:flex; align-items:center; padding:16px 20px; border-bottom:1px solid var(--line); position:sticky; top:0; background:#fff; }
+  .modal{ background:var(--surface); border-radius:12px; width:560px; max-width:92vw; max-height:80vh; overflow:auto; box-shadow:0 12px 40px rgba(0,0,0,.25); }
+  .modal .mhead{ display:flex; align-items:center; padding:16px 20px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--surface); }
   .modal .mhead h3{ margin:0; font-size:16px; } .modal .mhead .x{ margin-left:auto; border:0; background:transparent; font-size:20px; cursor:pointer; color:var(--muted); line-height:1; }
   .modal .mbody{ padding:18px 20px; }
   .stab{ display:flex; gap:6px; margin-bottom:16px; border-bottom:1px solid var(--line); }
@@ -418,7 +450,7 @@
   .authbox input{ width:100%; font-size:14px; padding:8px 10px; box-sizing:border-box; }
   .authbox .btn{ margin-top:14px; width:100%; }
   .whoslot{ display:inline-flex; align-items:center; gap:6px; }
-  .whochip{ display:inline-flex; align-items:center; gap:7px; padding:3px 10px; border:1px solid var(--line); border-radius:999px; background:#fff; }
+  .whochip{ display:inline-flex; align-items:center; gap:7px; padding:3px 10px; border:1px solid var(--line); border-radius:999px; background:var(--surface); }
   .whoname{ font-size:12.5px; font-weight:700; }
   .whorole{ font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
   .whochip.norole .whorole{ color:var(--bad); }
@@ -427,14 +459,51 @@
   .hchart{ display:flex; align-items:flex-start; gap:0; overflow:auto; padding:10px 4px; }
   .hlevel{ display:flex; flex-direction:column; gap:14px; padding:0 26px; position:relative; justify-content:center; }
   .hcard{ min-width:150px; max-width:190px; border:1px solid var(--line); border-left:6px solid var(--none);
-    border-radius:9px; padding:9px 11px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+    border-radius:9px; padding:9px 11px; background:var(--surface); box-shadow:0 1px 3px rgba(0,0,0,.05); }
   .hcard .hn{ font-weight:700; font-size:13.5px; margin-bottom:3px; }
-  .hcard .hl{ font-size:11px; color:#555; }
-  .hcard .hopt{ font-size:9.5px; font-weight:700; text-transform:uppercase; color:#9a7133; }
+  .hcard .hl{ font-size:11px; color:var(--muted); }
+  .hcard .hopt{ font-size:9.5px; font-weight:700; text-transform:uppercase; color:var(--optional); }
   .hgroup{ display:flex; flex-direction:column; gap:14px; }
   .hwrap{ display:flex; align-items:center; }
   .hconn{ width:26px; flex:none; align-self:stretch; border-left:1px solid var(--line); }
+
+  /* DARK — follows the system unless the header toggle forces light or dark */
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --ink:#e6e6e3; --muted:#a3a39d; --line:#3a3d42; --paper:#1d1f23; --panel:#1a1c20;
+    --accent:#8ea8ff; --accent-soft:#273150; --ok:#62d394; --okbg:#173426;
+    --bad:#ff8a80; --badbg:#3c1e1c; --none:#55585e; --leaf:#93bce4; --optional:#d9b06a;
+    --surface:#141619; --surface-2:#1b1d21; --ink-2:#d2d2ce; --on-accent:#0f1218; --accent-strong:#b7c7ff;
+    --chart-empty:#24272c; --alias-bg:#2b4a2a; --alias-bg-sel:#386034; --leaf-bg:#1e2f41;
+    --data-bg:#2e2a1f; --data-bg-sel:#3d3523; --data-ink:#e4ca8c; --data-line:#4c432c; --data-line-hover:#6a5b36;
+    --other-bg:#33291a; --other-tick:#cbbb8c; --mine-bg:#1b2c3d;
+    --hold-bg:#3a2c18; --warn-ink:#f1c274; --mark-bg:#5b4a12;
+    --kid-bg:#273150; --kid-line:#36436b; --kid-bg-hover:#303c62;
+    --note-line:#e39c3c; --note-bg:#3a2a15;
+    --agent:#8196ff; --agent-ink:#bcc8ff; --agent-bg:#222b4e;
+    --box-line:#4a4e57; --box-ink:#8b919c;
+    color-scheme:dark;
+  } }
+  :root[data-theme="dark"]{
+    --ink:#e6e6e3; --muted:#a3a39d; --line:#3a3d42; --paper:#1d1f23; --panel:#1a1c20;
+    --accent:#8ea8ff; --accent-soft:#273150; --ok:#62d394; --okbg:#173426;
+    --bad:#ff8a80; --badbg:#3c1e1c; --none:#55585e; --leaf:#93bce4; --optional:#d9b06a;
+    --surface:#141619; --surface-2:#1b1d21; --ink-2:#d2d2ce; --on-accent:#0f1218; --accent-strong:#b7c7ff;
+    --chart-empty:#24272c; --alias-bg:#2b4a2a; --alias-bg-sel:#386034; --leaf-bg:#1e2f41;
+    --data-bg:#2e2a1f; --data-bg-sel:#3d3523; --data-ink:#e4ca8c; --data-line:#4c432c; --data-line-hover:#6a5b36;
+    --other-bg:#33291a; --other-tick:#cbbb8c; --mine-bg:#1b2c3d;
+    --hold-bg:#3a2c18; --warn-ink:#f1c274; --mark-bg:#5b4a12;
+    --kid-bg:#273150; --kid-line:#36436b; --kid-bg-hover:#303c62;
+    --note-line:#e39c3c; --note-bg:#3a2a15;
+    --agent:#8196ff; --agent-ink:#bcc8ff; --agent-bg:#222b4e;
+    --box-line:#4a4e57; --box-ink:#8b919c;
+    color-scheme:dark;
+  }
 </style>
+<script>
+  // Theme before first paint, so a forced Light/Dark never flashes the other.
+  // Auto needs nothing here: the stylesheet's media query handles it.
+  try{ var t=localStorage.getItem("cct.theme"); if(t==="light"||t==="dark") document.documentElement.setAttribute("data-theme",t); }catch(e){}
+</script>
 </head>
 <body>
 <header>
@@ -456,6 +525,8 @@
     <select id="projpick"></select>
     <button id="newprojbtn" class="btn ghost sm">+ New</button>
     <button id="notesbtn" class="btn ghost sm" title="Notes from evaluators">✉ Notes</button>
+    <button id="agentbtn" class="btn ghost sm" title="Questions from the AI agent">🤖 Agent</button>
+    <button id="themebtn" class="btn ghost sm" title="Theme — click to change">◐ Auto</button>
     <button id="settingsbtn" class="btn ghost sm">⚙ Settings</button>
     <span id="whoami" class="whoslot"></span>
   </div>
@@ -598,13 +669,13 @@ async function signOut(){
 // Global role from user_profiles. Null means no profile row, which will mean no
 // access at all once RLS is on — deliberately fails closed.
 async function loadRole(){
-  S.role = null; S.fullName = null;
+  S.role = null; S.fullName = null; S.isAgent = false;
   if(!SESSION || !SESSION.user) return null;
   try{
-    const r = await api("user_profiles?select=role,full_name&user_id=eq." + SESSION.user.id);
+    const r = await api("user_profiles?select=role,full_name,is_agent&user_id=eq." + SESSION.user.id);
     if(!r.ok) return null;
     const rows = await r.json();
-    if(rows.length){ S.role = rows[0].role; S.fullName = rows[0].full_name || null; }
+    if(rows.length){ S.role = rows[0].role; S.fullName = rows[0].full_name || null; S.isAgent = !!rows[0].is_agent; }
   }catch(e){ /* offline — renderWhoAmI will show "no role" */ }
   return S.role;
 }
@@ -737,6 +808,8 @@ function applyRoleToChrome(){
   $("settingsbtn").style.display = atLeast("admin")   ? "" : "none";
   $("newprojbtn").style.display  = atLeast("admin")   ? "" : "none";
   $("notesbtn").style.display    = atLeast("builder") ? "" : "none";
+  // Any member may READ the agent's questions; only an admin answers them.
+  $("agentbtn").style.display    = atLeast("evaluator") ? "" : "none";
 }
 
 /* ---------- the sign-in screen ---------- */
@@ -922,7 +995,10 @@ const S={ mode:"build", nodes:[], systems:[], scaleValues:[], evals:[], projects
   channels:[], currentChannel:null,       // B18 — a rating is node x system x CHANNEL
   aliasMode:false,                        // 3b — show the selected system's own words in the tree
   role:null, fullName:null,              // set by loadRole(); null = no access once RLS is on
-  myEvaluatorId:null };                  // set by setIdentityFromSession(); used for SHADING only, never for lookup
+  myEvaluatorId:null,                    // set by setIdentityFromSession(); used for SHADING only, never for lookup
+  isAgent:false,                         // R217 — set by loadRole(); an agent login never answers questions
+  agentQuestions:[], agentRatings:[],    // R217 — this project's, loaded with everything else
+  agentBriefs:[] };                      // R217 (e2) — briefs, with source text
 
 function svById(id){ return S.scaleValues.find(v=>v.id===id); }
 function svByLabel(l){ return S.scaleValues.find(v=>v.label===l); }
@@ -1095,6 +1171,7 @@ function treeNode(n){
     nm.title = (sys?sys.name:"This system")+" calls this “"+alias+"”.\nCanonical name: "+n.name;
   }
   row.appendChild(nm);
+  const aq = agentMark(n); if(aq) row.appendChild(aq);   // R217 — an open question from the agent
   // No grp/leaf/data pill. The caret already says whether a node has children,
   // and a data element is now shown by the cream row behind it. "on hold" stays
   // — it is a state nothing else reports.
@@ -1940,6 +2017,9 @@ function renderMatrix(r){
         who.title="Rated by "+raterName(ex)+", not you. You can change it — it will then be recorded as yours.";
         td.appendChild(who);
       }
+      // R217 — the agent's own rating, BESIDE the human one, never in its place.
+      // It does not colour anything: node colour stays the human rating (D9).
+      const chip=agentChip(n.id, s.id, ch.id); if(chip) td.appendChild(chip);
       tr.appendChild(td);
     });
     tbl.appendChild(tr);
@@ -2136,7 +2216,7 @@ function chartCardRow(n){
     S.systems.forEach(s=>{
       const lv=levelFor(n.id,s.id);
       const cell=el("div","syscell");
-      cell.style.background = lv?tint(lv.color,0.55):"#f0f0ee";
+      cell.style.background = lv?tint(lv.color,0.55):"var(--chart-empty)";
       cell.title = s.name + (lv?": "+lv.label:": not rated");
       cell.appendChild(el("span","sccode", s.code||s.name.slice(0,3).toUpperCase()));
       cell.appendChild(el("span","scnum", lv?String(lv.num):"–"));
@@ -2570,6 +2650,337 @@ function openNotesList(){
   ov.addEventListener("click", e => { if(e.target === ov) ov.remove(); });
 }
 
+/* ---------- THE AGENT (R217 piece e) ----------
+   A taxonomy-assistant AI agent is a member of some taxonomies (an admin
+   enables it in Settings → Evaluators). It edits like a builder, rates into
+   its OWN store (agent_ratings), and asks multiple-choice questions here.
+
+   ANSWERING — admins only, and only by clicking a posted option. The save goes
+   through saveOp, so a write the database refuses shows as NOT SAVED (the
+   R181 lesson). Then the app calls the wake function (cct-agent-wake), which
+   starts the agent's cloud run, and shows WOKEN or NOT WOKEN — with a reason
+   and "Wake again", because a wake-up that silently failed would leave the
+   answer waiting forever (ruled 2026-10-24, question 5).
+
+   The database enforces all of this independently (33_agent.sql): an agent
+   cannot answer, a non-admin cannot answer, and an answer that is not one of
+   the posted keys cannot be stored. The app's checks are for clarity, not
+   for safety.
+
+   The agent's ratings appear as a small blue chip in the matrix cell, BESIDE
+   the human rating. They never colour the tree: node colour stays the human
+   rating, by D9.
+------------------------------------------------------------------------- */
+
+const WAKE_URL = SUPABASE_URL + "/functions/v1/cct-agent-wake";
+
+function openAgentQuestionsFor(nodeId){
+  return S.agentQuestions.filter(q => q.node_id === nodeId && q.status === "open");
+}
+function openAgentCount(){
+  return S.agentQuestions.filter(q => q.status === "open").length;
+}
+// The recommendation FIRST and marked — the rule for every decision put to Seebo.
+function orderedOptions(q){
+  const opts = Array.isArray(q && q.options) ? q.options.filter(o => o && o.key) : [];
+  const i = opts.findIndex(o => o.key === q.recommended);
+  if(i > 0){ const r = opts.splice(i, 1)[0]; opts.unshift(r); }
+  return opts.map(o => ({ key:o.key, label:o.label || o.key, detail:o.detail || "",
+                          recommended: o.key === q.recommended }));
+}
+function agentRatingFor(nodeId, systemId, channelId){
+  if(!channelId) return null;
+  return S.agentRatings.find(r => r.node_id === nodeId && r.system_id === systemId
+                               && r.channel_id === channelId) || null;
+}
+// Only an admin who is not itself an agent may answer. The database says the same.
+function canAnswerAgent(){ return atLeast("admin") && !S.isAgent; }
+// What the wake function said, as something to show. A failure is never silent.
+function wakeMessage(res){
+  if(!res) return { ok:false, text:"Not woken: no reply from the wake function." };
+  if(res.woken) return { ok:true, text:"Agent woken.", link: res.session_url || null };
+  return { ok:false, text:"Not woken: " + (res.error || "no reason given") };
+}
+
+function refreshAgentBadge(){
+  const b = $("agentbtn"); if(!b) return;
+  const n = openAgentCount();
+  b.textContent = n ? "🤖 Agent (" + n + ")" : "🤖 Agent";
+  b.classList.toggle("hasq", n > 0);
+}
+function agentMark(node){
+  const open = openAgentQuestionsFor(node.id);
+  if(!open.length) return null;
+  const m = el("span", "agentq", "?");
+  m.title = "The agent has " + open.length + " open question" + (open.length > 1 ? "s" : "")
+          + " about this node — see 🤖 Agent";
+  return m;
+}
+function agentChip(nodeId, systemId, channelId){
+  const r = agentRatingFor(nodeId, systemId, channelId);
+  if(!r) return null;
+  const v = r.scale_value_id ? svById(r.scale_value_id) : null;
+  const c = el("span", "agentchip", v ? (v.code || (v.label || "?").slice(0,1).toUpperCase()) : "–");
+  c.title = raterName({ evaluator_id: r.evaluator_id, evaluator: "The agent" })
+          + " (agent): " + (v ? v.label : "no level") + (r.note ? " — " + r.note : "")
+          + "\nShown beside the human rating; it does not colour the tree.";
+  return c;
+}
+
+// target is { question_id } or { brief_id } — the wake function takes exactly one
+async function wakeAgent(target, slot){
+  if(typeof target === "string") target = { question_id: target };   // older callers pass a question id
+  slot.className = "wakestat"; slot.textContent = "Waking the agent…";
+  let res = null;
+  try{
+    const sess = await ensureFreshSession();
+    const r = await fetch(WAKE_URL, { method:"POST",
+      headers:{ apikey:SUPABASE_KEY, Authorization:"Bearer " + (sess ? sess.access_token : ""),
+                "Content-Type":"application/json" },
+      body: JSON.stringify(target) });
+    res = await r.json().catch(() => ({ woken:false, error:"HTTP " + r.status }));
+  }catch(e){ res = { woken:false, error:"could not reach the wake function" }; }
+  const m = wakeMessage(res);
+  slot.innerHTML = ""; slot.className = "wakestat " + (m.ok ? "ok" : "bad");
+  slot.appendChild(el("span", null, m.text));
+  if(m.link){
+    const a = el("a", null, " Open the run ↗"); a.href = m.link; a.target = "_blank"; a.rel = "noopener";
+    slot.appendChild(a);
+  }
+  if(!m.ok){
+    const again = el("button", "btn ghost sm", "Wake again"); again.style.marginLeft = "8px";
+    again.addEventListener("click", () => wakeAgent(target, slot));
+    slot.appendChild(again);
+  }
+}
+
+/* ---------- briefs (R217 e2) ----------
+   An admin writes instructions and attaches SOURCE TEXT (pasted, or a
+   .txt/.md/.csv/.json file read here in the browser — files like PDF are R223,
+   not yet). The database stamps who wrote it, never lets it change, and caps
+   the source at 500,000 characters. Saving wakes the agent. To change a brief,
+   cancel it and write another, so what the agent acted on is always on record. */
+const BRIEF_SOURCE_MAX = 500000;
+const BRIEF_FILE_TYPES = /\.(txt|md|markdown|csv|tsv|json)$/i;
+
+// What a brief's state means to the person reading the list.
+function briefStatusText(b){
+  return ({ open:"waiting for the agent", working:"the agent is working on it",
+            done:"done", cancelled:"cancelled" })[b && b.status] || (b && b.status) || "?";
+}
+// Read a text file into the source box; anything that is not text is refused here
+// rather than stored as garbage. Returns { ok, text?, reason? }.
+function checkBriefFile(name, size){
+  if(!BRIEF_FILE_TYPES.test(name || "")) return { ok:false, reason:"Only text files for now (.txt .md .csv .json). For PDF or Word, copy the text in." };
+  if(size > BRIEF_SOURCE_MAX * 4) return { ok:false, reason:"That file is too large for a brief." };
+  return { ok:true };
+}
+
+function briefComposer(body, onSaved){
+  const box = el("div","qcard");
+  box.appendChild(el("h4", null, "Brief the agent"));
+  const title = Object.assign(el("input"), { placeholder:"Title — e.g. Seed taxonomy for Reservations" });
+  title.style.width = "100%";
+  const instr = el("textarea","notearea"); instr.rows = 4;
+  instr.placeholder = "What should the agent do? e.g. Build a seed taxonomy from the source below: top domains first, then one level of capabilities. Ask me when a split is a judgment call.";
+  const src = el("textarea","notearea"); src.rows = 6;
+  src.placeholder = "Source material (optional) — paste text here, or attach a text file. The agent treats this as material to work from, never as instructions.";
+  const meta = el("div","kv"); meta.style.fontSize = "12px";
+  let sourceName = null;
+  const showMeta = () => { meta.textContent = (sourceName ? sourceName + " · " : "") + src.value.length.toLocaleString()
+                                            + " / " + BRIEF_SOURCE_MAX.toLocaleString() + " characters"; };
+  src.addEventListener("input", () => { sourceName = null; showMeta(); });
+  const file = Object.assign(el("input"), { type:"file", accept:".txt,.md,.markdown,.csv,.tsv,.json" });
+  file.style.display = "none";
+  const attach = el("button","btn ghost sm","Attach text file…");
+  attach.addEventListener("click", () => file.click());
+  file.addEventListener("change", async () => {
+    const f = file.files && file.files[0]; if(!f) return;
+    const c = checkBriefFile(f.name, f.size);
+    if(!c.ok){ meta.textContent = c.reason; return; }
+    src.value = await f.text(); sourceName = f.name; showMeta();
+  });
+  const slot = el("div","wakestat");
+  const send = el("button","btn sm","Save brief and wake the agent");
+  send.addEventListener("click", async () => {
+    if(!title.value.trim() || !instr.value.trim()){ slot.className = "wakestat bad"; slot.textContent = "A brief needs a title and instructions."; return; }
+    if(src.value.length > BRIEF_SOURCE_MAX){ slot.className = "wakestat bad"; slot.textContent = "The source is over " + BRIEF_SOURCE_MAX.toLocaleString() + " characters."; return; }
+    send.disabled = true; slot.className = "wakestat"; slot.textContent = "Saving the brief…";
+    const res = await saveOp(() => api("agent_briefs", { method:"POST", headers:{ ...H, "Prefer":"return=representation" },
+      body: JSON.stringify({ project_id:S.projectId, title:title.value.trim(), instructions:instr.value.trim(),
+                             source_text: src.value || null, source_name: sourceName }) }));
+    if(!res){
+      send.disabled = false; slot.className = "wakestat bad";
+      slot.textContent = "Not saved — " + (lastSaveError || "the database refused it") + ". Nothing was sent to the agent.";
+      return;
+    }
+    const b = (await res.json())[0];
+    S.agentBriefs.unshift(b);
+    title.value = ""; instr.value = ""; src.value = ""; sourceName = null; showMeta(); send.disabled = false;
+    onSaved();                                  // the list only; this slot keeps its message
+    await wakeAgent({ brief_id: b.id }, slot);
+  });
+  [title, el("div","kv","Instructions"), instr, el("div","kv","Source"), src].forEach(x => { x.style && (x.style.marginTop = "6px"); box.appendChild(x); });
+  const row = el("div","pv-bar"); row.appendChild(attach); row.appendChild(file); row.appendChild(meta);
+  box.appendChild(row); box.appendChild(send); box.appendChild(slot);
+  showMeta();
+  body.appendChild(box);
+}
+
+function briefList(body){
+  body.innerHTML = "";
+  if(!S.agentBriefs.length) return;
+  body.appendChild(el("h4", null, "Briefs"));
+  S.agentBriefs.forEach(b => {
+    const card = el("div","qcard" + (b.status === "done" || b.status === "cancelled" ? " done" : ""));
+    const top = el("div","notehead");
+    top.appendChild(el("b", null, b.title));
+    top.appendChild(el("span","notemeta", briefStatusText(b) + " · " + auditWhen(b.created_at)));
+    card.appendChild(top);
+    card.appendChild(el("div","qtext", b.instructions));
+    if(b.source_text) card.appendChild(el("div","kv", "Source: " + (b.source_name || "pasted text") + " · "
+                                          + b.source_text.length.toLocaleString() + " characters"));
+    if(b.result_note) card.appendChild(el("div","noteres", "The agent: " + b.result_note));
+    if(canAnswerAgent() && (b.status === "open" || b.status === "working")){
+      const slot = el("div","wakestat");
+      const wake = el("button","btn ghost sm","Wake the agent");
+      wake.addEventListener("click", () => wakeAgent({ brief_id: b.id }, slot));
+      const cancel = el("button","btn ghost sm","Cancel brief"); cancel.style.marginLeft = "8px";
+      cancel.addEventListener("click", async () => {
+        if(!confirm("Cancel “" + b.title + "”? The agent will not act on it. (A brief cannot be edited — write a new one instead.)")) return;
+        const res = await saveOp(() => api("agent_briefs?id=eq." + b.id, { method:"PATCH",
+          headers:{ ...H, "Prefer":"return=representation" }, body: JSON.stringify({ status:"cancelled" }) }));
+        if(res){ Object.assign(b, (await res.json())[0]); card.classList.add("done");
+                 top.lastChild.textContent = briefStatusText(b) + " · " + auditWhen(b.created_at); slot.innerHTML = ""; }
+        else { slot.className = "wakestat bad"; slot.textContent = "Not cancelled — " + (lastSaveError || "refused"); }
+      });
+      slot.appendChild(wake); slot.appendChild(cancel);
+      card.appendChild(slot);
+    }
+    body.appendChild(card);
+  });
+}
+
+async function answerAgent(q, key, card, slot){
+  card.querySelectorAll(".qopt").forEach(b => b.disabled = true);
+  slot.className = "wakestat"; slot.textContent = "Saving your answer…";
+  const res = await saveOp(() => api("agent_questions?id=eq." + q.id, {
+    method:"PATCH", headers:{ ...H, "Prefer":"return=representation" },
+    body: JSON.stringify({ status:"answered", answer:key }) }));
+  if(!res){
+    slot.className = "wakestat bad";
+    slot.textContent = "Not saved — " + (lastSaveError || "the database refused it") + ". Nothing was sent to the agent.";
+    card.querySelectorAll(".qopt").forEach(b => b.disabled = false);
+    return;
+  }
+  const upd = (await res.json())[0];
+  const i = S.agentQuestions.findIndex(x => x.id === q.id); if(i >= 0) S.agentQuestions[i] = upd;
+  card.querySelectorAll(".qopt").forEach(b => b.classList.toggle("chosen", b.dataset.key === key));
+  refreshAgentBadge(); renderTree();
+  await wakeAgent(q.id, slot);
+}
+
+function openAgentPanel(){
+  let showDone = false;
+  const ov = el("div","overlay");
+  const modal = el("div","modal");
+  const head = el("div","mhead");
+  head.appendChild(el("h3", null, "Questions from the agent"));
+  const x = el("button","x","×"); x.addEventListener("click", () => ov.remove()); head.appendChild(x);
+  modal.appendChild(head);
+  const body = el("div","mbody"); modal.appendChild(body);
+
+  const nodeLink = q => {
+    const node = q.node_id ? nodeById(q.node_id) : null;
+    const link = el("button","notelink", node ? pathOf(node) : "(whole taxonomy)");
+    if(node) link.addEventListener("click", () => { ov.remove(); goTo(node.id); }); else link.disabled = true;
+    return link;
+  };
+
+  const draw = () => {
+    body.innerHTML = "";
+    const all = S.agentQuestions.slice().sort((a,b) => (b.created_at||"").localeCompare(a.created_at||""));
+    const open = all.filter(q => q.status === "open");
+    const waiting = all.filter(q => q.status === "answered");
+    const done = all.filter(q => q.status === "acted" || q.status === "withdrawn");
+
+    if(!canAnswerAgent()){
+      body.appendChild(el("p","kv", "Only an administrator briefs the agent or answers its questions. You can read them here."));
+    }
+    // R217 (e2) — briefs first: writing one is how work starts
+    const briefsWrap = el("div");
+    if(canAnswerAgent()) briefComposer(body, () => briefList(briefsWrap));
+    body.appendChild(briefsWrap);
+    briefList(briefsWrap);
+
+    body.appendChild(el("h4", null, "Questions"));
+    if(!open.length) body.appendChild(el("p", null, "No open questions."));
+
+    open.forEach(q => {
+      const card = el("div","qcard");
+      const top = el("div","notehead");
+      top.appendChild(nodeLink(q));
+      top.appendChild(el("span","notemeta", "asked " + auditWhen(q.created_at)));
+      card.appendChild(top);
+      card.appendChild(el("div","qtext", q.question));
+      const opts = el("div","qopts");
+      const slot = el("div","wakestat");
+      orderedOptions(q).forEach(o => {
+        const b = el("button","qopt" + (o.recommended ? " rec" : ""));
+        b.dataset.key = o.key;
+        b.appendChild(document.createTextNode(o.key + ") " + o.label));
+        if(o.recommended) b.appendChild(el("span","recmark","recommended"));
+        if(o.detail) b.appendChild(el("span","qdetail", o.detail));
+        if(canAnswerAgent()) b.addEventListener("click", () => answerAgent(q, o.key, card, slot));
+        else b.disabled = true;
+        opts.appendChild(b);
+      });
+      card.appendChild(opts);
+      card.appendChild(slot);
+      body.appendChild(card);
+    });
+
+    if(waiting.length){
+      body.appendChild(el("h4", null, "Answered — waiting for the agent"));
+      waiting.forEach(q => {
+        const card = el("div","qcard");
+        const top = el("div","notehead"); top.appendChild(nodeLink(q));
+        top.appendChild(el("span","notemeta", "answered " + auditWhen(q.answered_at)));
+        card.appendChild(top);
+        const chosen = orderedOptions(q).find(o => o.key === q.answer);
+        card.appendChild(el("div","qtext", q.question + "  →  " + q.answer + (chosen ? ") " + chosen.label : "")));
+        const slot = el("div","wakestat");
+        if(canAnswerAgent()){
+          const again = el("button","btn ghost sm","Wake the agent");
+          again.addEventListener("click", () => wakeAgent(q.id, slot));
+          slot.appendChild(again);
+        }
+        card.appendChild(slot);
+        body.appendChild(card);
+      });
+    }
+
+    if(done.length){
+      const t = el("button","btn ghost sm", (showDone ? "Hide" : "Show") + " " + done.length + " finished");
+      t.style.marginTop = "14px";
+      t.addEventListener("click", () => { showDone = !showDone; draw(); });
+      body.appendChild(t);
+      if(showDone) done.forEach(q => {
+        const card = el("div","qcard done");
+        const top = el("div","notehead"); top.appendChild(nodeLink(q));
+        top.appendChild(el("span","notemeta", q.status === "acted" ? "acted " + auditWhen(q.acted_at) : "withdrawn"));
+        card.appendChild(top);
+        card.appendChild(el("div","qtext", q.question + (q.answer ? "  →  " + q.answer : "")));
+        if(q.result_note) card.appendChild(el("div","noteres", "The agent: " + q.result_note));
+        body.appendChild(card);
+      });
+    }
+  };
+  draw();
+  ov.appendChild(modal); document.body.appendChild(ov);
+  ov.addEventListener("click", e => { if(e.target === ov) ov.remove(); });
+}
+
 /* ---------- SCREENSHOTS / EVIDENCE (S5) ----------
    Shared project evidence, not per-evaluator: one upload, visible to everyone.
    Attaches to any node; optionally tagged with the system it depicts (a
@@ -2819,7 +3230,7 @@ async function loadProjectData(){
   }
   // node_rollup is deliberately NOT fetched. Colour comes from each node's own
   // rating (D9); the view remains in the database, read by nothing.
-  const [n,sy,sv,ev,evl,al,nt,sc,ch]=await Promise.all([
+  const [n,sy,sv,ev,evl,al,nt,sc,ch,aq,ar,ab]=await Promise.all([
     api("nodes?select=*&project_id=eq."+pid),
     api("systems?select=*&project_id=eq."+pid),
     svPromise,
@@ -2828,7 +3239,10 @@ async function loadProjectData(){
     api("aliases?select=*&project_id=eq."+pid),
     api("admin_notes?select=*&project_id=eq."+pid),
     api("screenshots?select=*&project_id=eq."+pid),
-    api("channels?select=*&order=sort_order&project_id=eq."+pid)
+    api("channels?select=*&order=sort_order&project_id=eq."+pid),
+    api("agent_questions?select=*&order=created_at&project_id=eq."+pid),   // R217 (33)
+    api("agent_ratings?select=*&project_id=eq."+pid),                      // R217 (33)
+    api("agent_briefs?select=*&order=created_at.desc&project_id=eq."+pid)  // R217 (34)
   ]);
   S.nodes=await n.json(); S.systems=await sy.json(); S.scaleValues=await sv.json();
   S.evals=await ev.json(); S.evaluators=await evl.json();
@@ -2836,7 +3250,11 @@ async function loadProjectData(){
   S.notes=nt.ok?await nt.json():[];
   S.shots=sc.ok?await sc.json():[];   // table may not exist until 06_admin_notes.sql is run
   S.channels=ch.ok?await ch.json():[];
+  S.agentQuestions=aq.ok?await aq.json():[];
+  S.agentRatings=ar.ok?await ar.json():[];
+  S.agentBriefs=ab.ok?await ab.json():[];
   refreshNoteBadge();
+  refreshAgentBadge();
   S.currentSystem = S.systems[0] ? S.systems[0].id : null;
   // Default to the current system's first channel. Recomputed rather than
   // remembered across projects — a channel id from another project would
@@ -3096,6 +3514,7 @@ function renderEvaluatorsPanel(panel){
 
   S.evaluators.forEach(ev=>{
     const tr=el("tr");
+    if(ev.user_id) tr.dataset.userId=ev.user_id;   // R217 — lets the agent's row be marked below
 
     // Name is now READ-ONLY here. Renaming an evaluator orphans every rating
     // they made, because the app still matches ratings on the name text. Until
@@ -3150,6 +3569,59 @@ function renderEvaluatorsPanel(panel){
     "someone here would orphan every rating they have made.";
   panel.appendChild(hint);
   panel.appendChild(msg);
+
+  // R217 \u2014 the AGENT is the one exception to D8. D8 sends membership to
+  // cct-admin because adding a PERSON means choosing which login they are.
+  // There is only one agent login, found by its is_agent flag, so there is
+  // nothing to choose. Admins only; the database enforces the same.
+  if(atLeast("admin")){
+    const agentBox=el("div","kv"); agentBox.style.marginTop="12px";
+    panel.appendChild(agentBox);
+    fillAgentBox(panel, agentBox);
+  }
+}
+
+async function fillAgentBox(panel, box){
+  box.textContent="Looking for the agent\u2026";
+  let agents=[];
+  try{
+    const r=await api("user_profiles?select=user_id,full_name&is_agent=eq.true");
+    agents = r.ok ? await r.json() : [];
+  }catch(e){ box.textContent="Could not check for the agent."; return; }
+  if(!agents.length){ box.textContent="No agent login exists, so there is nothing to enable."; return; }
+  // mark the agent's membership row(s) in the table above
+  panel.querySelectorAll("tr[data-user-id]").forEach(tr=>{
+    if(agents.some(a=>a.user_id===tr.dataset.userId) && !tr.querySelector(".agenttag")){
+      const tag=el("span","mini agenttag","agent"); tag.style.marginLeft="6px";
+      tag.title="An AI agent. It edits like a builder, rates into its own column, and asks you questions under \ud83e\udd16 Agent.";
+      tr.firstChild.appendChild(tag);
+    }
+  });
+  box.innerHTML="";
+  agents.forEach(a=>{
+    const name=a.full_name||"the agent";
+    const member=S.evaluators.some(ev=>ev.user_id===a.user_id);
+    if(member){
+      box.appendChild(el("div",null,"\ud83e\udd16 "+name+" is enabled on this taxonomy. Removing it is done in the database for now "+
+        "(it deletes the agent's ratings and questions here)."));
+      return;
+    }
+    const line=el("div"); line.appendChild(el("span",null,"\ud83e\udd16 "+name+" is not enabled on this taxonomy. "));
+    const b=el("button","btn sm","Enable "+name+" here");
+    b.title="Makes the agent a member of this taxonomy. It will be able to create, edit and delete nodes like a builder, "+
+            "and to rate into its own column. It cannot write human ratings.";
+    const note=el("span","smsg");
+    b.addEventListener("click",async()=>{
+      if(!confirm("Enable "+name+" on this taxonomy?\n\nIt will be able to create, edit and DELETE nodes like a builder "+
+                  "(deleting a node removes everything under it), and to rate into its own column. It cannot write human ratings.")) return;
+      b.disabled=true;
+      const res=await saveOp(()=>api("evaluators",{method:"POST",headers:{...H,"Prefer":"return=representation"},
+        body:JSON.stringify({ project_id:S.projectId, name, user_id:a.user_id })}));
+      if(res){ S.evaluators.push((await res.json())[0]); renderEvaluatorsPanel(panel); }
+      else { b.disabled=false; note.className="smsg bad"; note.textContent=" Not enabled \u2014 "+(lastSaveError||"the database refused it"); }
+    });
+    line.appendChild(b); line.appendChild(note); box.appendChild(line);
+  });
 }
 async function updateEvaluator(ev,patch,msg){
   const res=await saveOp(()=>api("evaluators?id=eq."+ev.id,{method:"PATCH",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify(patch)}));
@@ -3645,6 +4117,32 @@ document.querySelectorAll(".mode").forEach(b=>b.addEventListener("click",()=>set
 $("retrybtn").addEventListener("click",async()=>{ if(lastFailedOp){ const op=lastFailedOp; await saveOp(op); } });
 $("settingsbtn").addEventListener("click",openSettings);
 $("notesbtn").addEventListener("click",openNotesList);
+$("agentbtn").addEventListener("click",openAgentPanel);
+
+/* ---------- THEME (dark mode, ruled 2026-10-24: Auto + a toggle) ----------
+   Auto follows the computer's light/dark setting; Light and Dark force it.
+   Remembered per browser. Storage can be blocked (private windows) — then it
+   simply stays on Auto. Scale colours are DATA and never change with theme;
+   ink() already picks readable text for each. */
+const THEME_KEY = "cct.theme";
+const THEMES = ["auto", "light", "dark"];
+function readTheme(){
+  try{ const v = localStorage.getItem(THEME_KEY); return THEMES.includes(v) ? v : "auto"; }
+  catch(e){ return "auto"; }
+}
+function applyTheme(mode){
+  if(mode === "auto") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", mode);
+  const b = $("themebtn");
+  b.textContent = { auto:"◐ Auto", light:"☀ Light", dark:"☾ Dark" }[mode];
+  b.title = "Theme: " + mode + (mode === "auto" ? " (follows your computer)" : "") + " — click to change";
+}
+$("themebtn").addEventListener("click", () => {
+  const next = THEMES[(THEMES.indexOf(readTheme()) + 1) % THEMES.length];
+  try{ localStorage.setItem(THEME_KEY, next); }catch(e){ /* stays usable, just not remembered */ }
+  applyTheme(next);
+});
+applyTheme(readTheme());
 $("quickaddbtn").addEventListener("click",quickAdd);
 $("quickadd").addEventListener("keydown",e=>{ if(e.key==="Enter")quickAdd(); });
 $("quickadd").addEventListener("paste",e=>{

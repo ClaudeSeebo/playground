@@ -1,0 +1,1574 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Car Service Rate Modeler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<!-- One file, two homes: opened straight from disk it runs on its own (hence the
+     doctype); published as an artifact it is wrapped in the host's skeleton. -->
+<style>
+:root {
+  color-scheme: light;
+  --paper: #f2f5f3;
+  --surface: #fcfdfc;
+  --ink: #15201c;
+  --ink-2: #45534d;
+  --muted: #6c7973;
+  --hair: #dbe2de;
+  --axis: #b7c2bd;
+  --field: #ffffff;
+  --brass: #8f6112;
+  --pos: #2a78d6;
+  --neg: #e34948;
+  --mid: #e7ebe9;
+  --good: #006300;
+  --warn: #8a5a00;
+  --crit: #c23434;
+  --crit-wash: #fbeaea;
+  --plate: #17221e;
+  --plate-edge: #17221e;
+  --plate-ink: #efe7d2;
+  --plate-muted: #a9b4ad;
+  --plate-brass: #dcb05a;
+  --tip-bg: #15201c;
+  --tip-ink: #f2f5f3;
+  --shadow: 0 1px 2px rgba(21, 32, 28, .06), 0 10px 28px rgba(21, 32, 28, .08);
+  --f-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --f-body: "Barlow", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #0c1210; --surface: #131a17; --ink: #ecf1ee; --ink-2: #b3bfba; --muted: #86928d;
+    --hair: #25302b; --axis: #3b4742; --field: #0f1613; --brass: #d8a846;
+    --pos: #3987e5; --neg: #e66767; --mid: #252d29; --good: #3dbb3d; --warn: #e2a63c;
+    --crit: #ef7b7b; --crit-wash: #2d1918;
+    --plate: #18221e; --plate-edge: #3a3322; --tip-bg: #ecf1ee; --tip-ink: #131a17; --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #0c1210; --surface: #131a17; --ink: #ecf1ee; --ink-2: #b3bfba; --muted: #86928d;
+  --hair: #25302b; --axis: #3b4742; --field: #0f1613; --brass: #d8a846;
+  --pos: #3987e5; --neg: #e66767; --mid: #252d29; --good: #3dbb3d; --warn: #e2a63c;
+  --crit: #ef7b7b; --crit-wash: #2d1918;
+  --plate: #18221e; --plate-edge: #3a3322; --tip-bg: #ecf1ee; --tip-ink: #131a17; --shadow: none;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 400 15px/1.5 var(--f-body); }
+[hidden] { display: none !important; }
+button, input, select, textarea, table { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+h1, h2, h3 { text-wrap: balance; }
+.num, td.n, th.n { font-variant-numeric: tabular-nums; }
+
+.page { max-width: 1200px; margin: 0 auto; padding-inline: 24px; padding-block: 28px 56px; display: grid; gap: 24px; }
+@media (max-width: 520px) { .page { padding-inline: 16px; padding-block: 20px 40px; } }
+
+/* ── Header ─────────────────────────────────────────── */
+.top { display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: flex-end; justify-content: space-between; }
+.eyebrow { margin: 0 0 6px; font: 600 13px/1.2 var(--f-display); letter-spacing: .14em; text-transform: uppercase; color: var(--brass); }
+h1 { margin: 0; font: 700 clamp(32px, 5.4vw, 48px)/.95 var(--f-display); letter-spacing: .01em; text-transform: uppercase; }
+.lede { margin: 10px 0 0; max-width: 64ch; color: var(--ink-2); }
+.chip { margin: 0; display: inline-flex; gap: 8px; align-items: center; padding: 6px 12px; border: 1px solid var(--hair); border-radius: 999px; background: var(--surface); color: var(--ink-2); font-size: 13.5px; }
+.chip b { color: var(--ink); font-weight: 600; }
+.chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--brass); flex: none; }
+
+/* ── Rate card plate + settings ─────────────────────── */
+.hero { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 20px; align-items: stretch; }
+@media (max-width: 880px) { .hero { grid-template-columns: minmax(0, 1fr); } }
+
+.plate {
+  position: relative; padding: 24px 28px 22px; border-radius: 12px; color: var(--plate-ink);
+  background-color: var(--plate);
+  background-image:
+    radial-gradient(circle at 14px 14px, var(--plate-brass) 0 2.4px, transparent 3px),
+    radial-gradient(circle at calc(100% - 14px) 14px, var(--plate-brass) 0 2.4px, transparent 3px),
+    radial-gradient(circle at 14px calc(100% - 14px), var(--plate-brass) 0 2.4px, transparent 3px),
+    radial-gradient(circle at calc(100% - 14px) calc(100% - 14px), var(--plate-brass) 0 2.4px, transparent 3px);
+  box-shadow: inset 0 0 0 1px rgba(220, 176, 90, .28), var(--shadow);
+  border: 1px solid var(--plate-edge);
+}
+.plate-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; align-items: baseline; padding-inline: 4px; }
+.plate-title { font: 700 15px/1 var(--f-display); letter-spacing: .22em; text-transform: uppercase; color: var(--plate-brass); }
+.plate-sub { font: 500 13px/1.3 var(--f-body); color: var(--plate-muted); }
+.tariff { margin: 14px 0 0; display: grid; gap: 2px; }
+.tariff-row { display: grid; grid-template-columns: auto minmax(24px, 1fr) auto; gap: 12px; align-items: baseline; padding: 6px 4px; }
+.tariff dt { font: 600 19px/1.1 var(--f-display); letter-spacing: .06em; text-transform: uppercase; }
+.tariff dt small { display: block; font: 500 12.5px/1.3 var(--f-body); letter-spacing: 0; text-transform: none; color: var(--plate-muted); }
+.leader { align-self: end; margin-bottom: 9px; border-bottom: 2px dotted rgba(169, 180, 173, .45); }
+.tariff dd { margin: 0; font: 700 clamp(32px, 4.8vw, 46px)/1 var(--f-display); color: var(--plate-brass); font-variant-numeric: tabular-nums; text-align: right; }
+.tariff dd .unit { font-size: .45em; font-weight: 600; color: var(--plate-muted); margin-left: 2px; }
+.tariff-row.off dt, .tariff-row.off dd { color: var(--plate-muted); }
+.tariff-row.off dd { font-size: 22px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+.flag { display: inline-block; margin-left: 8px; padding: 2px 6px 1px; border: 1px solid var(--plate-muted); border-radius: 4px; font: 600 11px/1.3 var(--f-display); letter-spacing: .08em; color: var(--plate-muted); vertical-align: 3px; }
+.plate-foot { margin: 14px 4px 0; padding-top: 12px; border-top: 1px solid rgba(239, 231, 210, .16); display: grid; gap: 6px; color: var(--plate-muted); font-size: 14px; }
+.plate-foot b { color: var(--plate-ink); font-weight: 600; }
+.plate-foot .example { font: 400 12.5px/1.5 var(--f-mono); }
+.plate-error { color: #f3b1a8; font-weight: 500; }
+
+.settings { margin: 0; display: grid; gap: 16px; padding: 20px 22px; background: var(--surface); border: 1px solid var(--hair); border-radius: 12px; align-content: start; }
+.settings fieldset { margin: 0; padding: 0; border: 0; display: grid; gap: 10px; min-width: 0; }
+.settings legend, .mini-title { padding: 0; margin: 0 0 2px; font: 600 13px/1.2 var(--f-display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.hint { margin: 0; font-size: 13px; color: var(--muted); }
+.switch { display: flex; gap: 12px; align-items: center; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch .track { flex: none; width: 40px; height: 22px; border-radius: 999px; background: var(--axis); position: relative; transition: background .15s; }
+.switch .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--surface); transition: transform .15s; }
+.switch input:checked + .track { background: var(--ink); }
+.switch input:checked + .track::after { transform: translateX(18px); }
+.switch input:focus-visible + .track { outline: 2px solid var(--brass); outline-offset: 2px; }
+.switch-text { display: grid; line-height: 1.25; }
+.switch-text strong { font-weight: 600; }
+.switch-text small { font-size: 13px; color: var(--muted); }
+.floors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 400px) { .floors { grid-template-columns: minmax(0, 1fr); } }
+.field { display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); }
+.money { display: flex; align-items: center; border: 1px solid var(--axis); border-radius: 8px; background: var(--field); padding-inline: 8px; }
+.money span { color: var(--muted); }
+.money input { width: 100%; min-width: 0; border: 0; background: transparent; padding: 7px 4px; text-align: right; font-variant-numeric: tabular-nums; outline: none; }
+.money:focus-within { outline: 2px solid var(--brass); outline-offset: 1px; }
+.money:has(input:disabled) { opacity: .45; }
+.money:has(input[aria-invalid="true"]) { border-color: var(--crit); background: var(--crit-wash); }
+.range-row { display: flex; gap: 12px; align-items: center; }
+.range-row input { flex: 1; min-width: 0; accent-color: var(--brass); }
+.range-row output { font: 600 20px/1 var(--f-display); min-width: 48px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ── Notes ──────────────────────────────────────────── */
+.notes { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.notes:empty { display: none; }
+.note { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; background: var(--surface); border: 1px solid var(--hair); border-radius: 10px; font-size: 14px; color: var(--ink-2); }
+.note b { color: var(--ink); font-weight: 600; }
+.note svg { flex: none; width: 18px; height: 18px; margin-top: 2px; }
+.note.info svg { color: var(--muted); }
+.note.warn svg { color: var(--warn); }
+.note.crit svg { color: var(--crit); }
+
+/* ── Panels ─────────────────────────────────────────── */
+.panel { display: grid; gap: 16px; padding: 22px 24px 24px; background: var(--surface); border: 1px solid var(--hair); border-radius: 12px; min-width: 0; }
+@media (max-width: 520px) { .panel { padding: 18px 16px 20px; } }
+.panel-head { display: grid; gap: 6px; }
+.panel-head h2 { margin: 0; font: 700 26px/1.05 var(--f-display); letter-spacing: .02em; text-transform: uppercase; }
+.panel-head p { margin: 0; max-width: 78ch; color: var(--ink-2); }
+.scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--axis); border-radius: 8px; background: var(--surface); font-weight: 600; font-size: 14px; cursor: pointer; }
+.btn:hover:not(:disabled) { border-color: var(--ink-2); }
+.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.btn.primary:hover:not(:disabled) { opacity: .88; }
+.btn.warn-confirm { border-color: var(--crit); color: var(--crit); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.seg { display: inline-flex; padding: 2px; border: 1px solid var(--axis); border-radius: 9px; background: var(--surface); }
+.seg label { position: relative; }
+.seg input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.seg span { display: block; padding: 5px 11px; border-radius: 7px; font-size: 13.5px; font-weight: 500; color: var(--ink-2); cursor: pointer; }
+.seg input:checked + span { background: var(--ink); color: var(--paper); }
+.seg input:focus-visible + span { outline: 2px solid var(--brass); outline-offset: 1px; }
+.select { display: inline-flex; gap: 8px; align-items: center; font-size: 13.5px; color: var(--ink-2); }
+.select select { padding: 6px 8px; border: 1px solid var(--axis); border-radius: 8px; background: var(--field); }
+.status-msg { font-size: 13.5px; color: var(--muted); }
+
+/* ── Network ────────────────────────────────────────── */
+.net-grid { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(270px, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 1180px) { .net-grid { grid-template-columns: minmax(0, 1fr); } }
+.net-figure { margin: 0; display: grid; gap: 10px; min-width: 0; }
+.net-figure .scroll-x > svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.net-figure figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
+#net-svg .w { stroke-linecap: round; }
+#net-svg .w.p { stroke: var(--pos); }
+#net-svg .w.n { stroke: var(--neg); }
+#net-svg .node circle { fill: var(--surface); stroke: var(--axis); stroke-width: 2; }
+#net-svg .node.p circle { stroke: var(--pos); }
+#net-svg .node.n circle { stroke: var(--neg); }
+#net-svg .node.io circle { stroke: var(--brass); stroke-width: 2.5; }
+#net-svg .node.off { opacity: .35; }
+#net-svg .node { cursor: default; outline: none; }
+#net-svg .node:hover circle, #net-svg .node:focus-visible circle { stroke-width: 3.5; }
+#net-svg .node:focus-visible circle { stroke: var(--brass); }
+#net-svg .node text { font: 500 10.5px var(--f-mono); fill: var(--ink); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+#net-svg .node.io text { font: 600 11px var(--f-display); letter-spacing: .04em; text-transform: uppercase; fill: var(--ink-2); }
+#net-svg .io-name { font: 600 16px var(--f-display); letter-spacing: .06em; text-transform: uppercase; fill: var(--ink); }
+#net-svg .io-val { font: 500 12.5px var(--f-mono); fill: var(--ink-2); }
+#net-svg .layer-name { font: 600 13px var(--f-display); letter-spacing: .1em; text-transform: uppercase; fill: var(--muted); text-anchor: middle; }
+#net-svg .layer-count { font: 400 12px var(--f-body); fill: var(--muted); text-anchor: middle; }
+.net-side { display: grid; gap: 14px 28px; min-width: 0; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: start; }
+.net-side > div { display: grid; gap: 14px; min-width: 0; }
+.net-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.net-status { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 3px; border: 1px solid currentColor; border-radius: 999px; font: 600 12.5px/1.2 var(--f-display); letter-spacing: .1em; text-transform: uppercase; }
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill.training { color: var(--brass); }
+.pill.training::before { animation: pulse 1s ease-in-out infinite; }
+.pill.settled { color: var(--good); }
+.pill.stopped { color: var(--warn); }
+.pill.paused, .pill.waiting { color: var(--muted); }
+@keyframes pulse { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .pill.training::before { animation: none; } .switch .track, .switch .track::after { transition: none; } }
+.step { font: 500 13px var(--f-mono); color: var(--ink-2); }
+.net-msg { margin: 0; font-size: 14px; color: var(--ink-2); }
+.readout { width: 100%; border-collapse: collapse; font-size: 14px; }
+.readout th, .readout td { padding: 6px 4px; border-bottom: 1px solid var(--hair); text-align: right; }
+.readout th:first-child, .readout td:first-child { text-align: left; }
+.readout thead th { font: 600 12.5px var(--f-display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.readout td { font: 400 13px var(--f-mono); }
+.readout td:first-child { font: 500 14px var(--f-body); }
+.readout tr.off td { color: var(--muted); }
+.revenue-line { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+.loss { display: grid; gap: 6px; }
+#loss-svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
+#loss-svg .grid { stroke: var(--hair); stroke-width: 1; }
+#loss-svg .axis { stroke: var(--axis); stroke-width: 1; }
+#loss-svg .tick { font: 400 10.5px var(--f-mono); fill: var(--muted); }
+#loss-svg .ref { stroke: var(--ink-2); stroke-width: 1; }
+#loss-svg .ref-label { font: 500 11px var(--f-body); fill: var(--ink-2); }
+#loss-svg .curve { fill: none; stroke: var(--brass); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+#loss-svg .area { fill: var(--brass); fill-opacity: .1; stroke: none; }
+#loss-svg .end { fill: var(--brass); stroke: var(--surface); stroke-width: 2; }
+#loss-svg .cross { stroke: var(--ink-2); stroke-width: 1; }
+#loss-svg .empty { font: 400 12px var(--f-body); fill: var(--muted); }
+
+/* ── Results table ──────────────────────────────────── */
+.results, .inputs { width: 100%; border-collapse: collapse; font-size: 14px; }
+.results th, .inputs th { font: 600 12.5px/1.2 var(--f-display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: left; padding: 6px 10px; vertical-align: bottom; }
+.results thead tr:first-child th { padding-bottom: 2px; }
+.results thead tr:last-child th, .inputs thead th { border-bottom: 1px solid var(--axis); }
+.results th.group { text-align: center; border-bottom: 1px solid var(--hair); }
+.results td { padding: 9px 10px; border-bottom: 1px solid var(--hair); vertical-align: middle; }
+.results th.n, .results td.n { text-align: right; white-space: nowrap; }
+.results tbody tr:hover td { background: var(--paper); }
+.results tfoot td { border-bottom: 0; border-top: 1px solid var(--axis); font-weight: 600; }
+.route-cell { min-width: 190px; }
+.route-cell .from { font-weight: 600; }
+.route-cell .to { color: var(--ink-2); }
+.route-cell .to::before { content: "→ "; color: var(--muted); }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.tag { padding: 1px 6px; border: 1px solid var(--hair); border-radius: 4px; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+td.gap-pos { color: var(--ink); }
+.barcell { min-width: 250px; }
+.barwrap { display: flex; gap: 10px; align-items: center; }
+.bar-track { position: relative; flex: none; width: 170px; height: 16px; }
+.bar-track .band { position: absolute; top: 0; bottom: 0; background: var(--mid); border-radius: 2px; }
+.bar-track .zero { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--axis); }
+.bar-track .bar { position: absolute; top: 2px; height: 12px; }
+.bar-track .bar.p { background: var(--pos); border-radius: 0 4px 4px 0; }
+.bar-track .bar.n { background: var(--neg); border-radius: 4px 0 0 4px; }
+.verdict { font: 600 12.5px/1 var(--f-display); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); white-space: nowrap; }
+.legend { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
+.legend i.p { background: var(--pos); }
+.legend i.n { background: var(--neg); }
+.legend i.band { background: var(--mid); border: 1px solid var(--axis); }
+.summary { margin: 0; font-size: 15px; color: var(--ink); max-width: 80ch; }
+
+/* ── Inputs table ───────────────────────────────────── */
+.inputs { min-width: 900px; }
+.inputs td { padding: 4px 4px; border-bottom: 1px solid var(--hair); }
+.inputs th.n { text-align: right; }
+.inputs td.idx { color: var(--muted); font: 400 12.5px var(--f-mono); text-align: right; padding-right: 8px; width: 34px; }
+.inputs input { width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid var(--hair); border-radius: 6px; background: var(--field); }
+.inputs input:hover { border-color: var(--axis); }
+.inputs input.n { text-align: right; font-variant-numeric: tabular-nums; }
+.inputs input[aria-invalid="true"] { border-color: var(--crit); background: var(--crit-wash); }
+.inputs .w-name { width: 22%; }
+.inputs .w-num { width: 9%; }
+.icon-btn { display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+.icon-btn:hover { border-color: var(--axis); color: var(--crit); }
+.paste { display: grid; gap: 10px; padding: 16px; border: 1px dashed var(--axis); border-radius: 10px; background: var(--paper); }
+.paste label { font-size: 14px; color: var(--ink-2); }
+.paste textarea { width: 100%; min-height: 150px; padding: 10px; border: 1px solid var(--axis); border-radius: 8px; background: var(--field); font: 400 12.5px/1.45 var(--f-mono); resize: vertical; white-space: pre; }
+.paste-preview { display: grid; gap: 8px; font-size: 14px; color: var(--ink-2); }
+.paste-preview.error { color: var(--crit); }
+.paste-preview ul { margin: 0; padding-left: 18px; }
+
+footer { display: grid; gap: 8px; padding-top: 4px; font-size: 13.5px; color: var(--muted); max-width: 90ch; }
+footer p { margin: 0; }
+footer b { color: var(--ink-2); font-weight: 600; }
+
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.tip { position: fixed; z-index: 20; max-width: 300px; padding: 10px 12px; border-radius: 8px; background: var(--tip-bg); color: var(--tip-ink); font-size: 13px; line-height: 1.4; pointer-events: none; box-shadow: 0 6px 20px rgba(0, 0, 0, .18); }
+.tip .t-title { font: 600 12px/1.2 var(--f-display); letter-spacing: .1em; text-transform: uppercase; opacity: .75; }
+.tip .t-value { font: 600 17px/1.3 var(--f-mono); }
+.tip .t-mono { font: 400 12px/1.5 var(--f-mono); opacity: .9; word-break: break-word; }
+.tip .t-note { opacity: .8; }
+</style>
+
+<div class="page">
+  <header class="top">
+    <div>
+      <p class="eyebrow">Car service · time and distance pricing</p>
+      <h1>Car Service Rate Modeler</h1>
+      <p class="lede">Finds the pickup, per-mile and per-minute rates that reproduce actual revenue across every ride, then shows which routes sit above or below that card.</p>
+    </div>
+    <p class="chip" id="data-chip"><span class="dot" aria-hidden="true"></span><span id="data-chip-text">Loading routes…</span></p>
+  </header>
+
+  <section class="hero" aria-label="Rate card and pricing rules">
+    <div class="plate" id="plate" aria-live="polite">
+      <div class="plate-head">
+        <span class="plate-title">Rate card</span>
+        <span class="plate-sub" id="plate-sub"></span>
+      </div>
+      <dl class="tariff" id="tariff">
+        <div class="tariff-row" data-k="base"><dt>Pickup charge<small>every ride</small></dt><span class="leader" aria-hidden="true"></span><dd></dd></div>
+        <div class="tariff-row" data-k="mile"><dt>Per mile<small>trip distance</small></dt><span class="leader" aria-hidden="true"></span><dd></dd></div>
+        <div class="tariff-row" data-k="minute"><dt>Per minute<small>trip time</small></dt><span class="leader" aria-hidden="true"></span><dd></dd></div>
+      </dl>
+      <div class="plate-foot" id="plate-foot"></div>
+    </div>
+
+    <form class="settings" id="settings" novalidate>
+      <fieldset>
+        <legend>Pricing rules</legend>
+        <label class="switch" for="pickup-on">
+          <input type="checkbox" id="pickup-on" role="switch">
+          <span class="track" aria-hidden="true"></span>
+          <span class="switch-text"><strong>Pickup charge</strong><small>A fixed amount added to every ride</small></span>
+        </label>
+        <div>
+          <p class="mini-title">Lowest allowed rate</p>
+          <div class="floors">
+            <label class="field" for="floor-base">Pickup<span class="money"><span>$</span><input id="floor-base" inputmode="decimal" autocomplete="off"></span></label>
+            <label class="field" for="floor-mile">Per mile<span class="money"><span>$</span><input id="floor-mile" inputmode="decimal" autocomplete="off"></span></label>
+            <label class="field" for="floor-minute">Per minute<span class="money"><span>$</span><input id="floor-minute" inputmode="decimal" autocomplete="off"></span></label>
+          </div>
+        </div>
+        <p class="hint">A rate held at its floor is marked on the card. Clear a floor to let that rate go below zero.</p>
+      </fieldset>
+      <fieldset>
+        <legend>Driver time</legend>
+        <label class="field" for="lf">Load factor: share of driver hours carrying a paying ride</label>
+        <div class="range-row"><input type="range" id="lf" min="10" max="100" step="5"><output id="lf-out" for="lf"></output></div>
+        <p class="hint">Scales the driver $/hour columns in the route table.</p>
+      </fieldset>
+    </form>
+  </section>
+
+  <ul class="notes" id="notes" aria-live="polite"></ul>
+
+  <section class="panel" aria-labelledby="net-h">
+    <div class="panel-head">
+      <h2 id="net-h">The network, solving</h2>
+      <p>Five layers of artificial neurons, trained on the same rides by gradient descent. None of the layers bends the signal (no activation function), so the whole stack multiplies out to one formula: pickup + miles × rate + minutes × rate. What it learns is therefore a rate card, which you can check against the exact answer.</p>
+    </div>
+    <div class="net-grid">
+      <figure class="net-figure">
+        <div class="scroll-x"><svg id="net-svg" viewBox="0 0 800 452" role="img" aria-labelledby="net-cap"></svg></div>
+        <figcaption id="net-cap">Each neuron shows the sum of its incoming weights. Lines are blue for positive weights and red for negative; thicker lines are larger weights. The inputs show the rate the network currently gives them. Hover or tab to a neuron to see its weights and the share of the rate card that passes through it.</figcaption>
+      </figure>
+      <aside class="net-side" aria-label="Training">
+        <div>
+        <div class="net-controls">
+          <button type="button" class="btn primary" id="train-btn">Pause</button>
+          <button type="button" class="btn" id="restart-btn">New random start</button>
+          <div class="seg" role="radiogroup" aria-label="Training speed">
+            <label><input type="radio" name="speed" id="speed-slow" value="slow"><span>Slow</span></label>
+            <label><input type="radio" name="speed" id="speed-normal" value="normal"><span>Normal</span></label>
+            <label><input type="radio" name="speed" id="speed-fast" value="fast"><span>Fast</span></label>
+          </div>
+        </div>
+        <div class="net-status"><span class="pill waiting" id="net-pill">Waiting</span><span class="step" id="net-step">Step 0</span></div>
+        <p class="net-msg" id="net-msg" aria-live="polite"></p>
+        <table class="readout" aria-label="Network rates against the exact answer">
+          <thead><tr><th scope="col">Rate</th><th scope="col">Network</th><th scope="col">Exact</th><th scope="col">Gap</th></tr></thead>
+          <tbody id="readout-body"></tbody>
+        </table>
+        <p class="revenue-line" id="revenue-line"></p>
+        </div>
+        <div class="loss">
+          <p class="mini-title">Typical miss per ride, while training</p>
+          <svg id="loss-svg" viewBox="0 0 320 136" role="img" aria-label="Typical miss per ride against training steps"></svg>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="routes-h">
+    <div class="panel-head">
+      <h2 id="routes-h">Route by route</h2>
+      <p class="summary" id="route-summary"></p>
+    </div>
+    <div class="toolbar">
+      <div class="seg" role="radiogroup" aria-label="Bars show">
+        <label><input type="radio" name="bars" id="bars-ride" value="ride"><span>Per ride</span></label>
+        <label><input type="radio" name="bars" id="bars-total" value="total"><span>Route total</span></label>
+      </div>
+      <label class="select" for="sort">Order
+        <select id="sort">
+          <option value="under">Most underpriced first</option>
+          <option value="over">Most overpriced first</option>
+          <option value="table">Table order</option>
+        </select>
+      </label>
+      <button type="button" class="btn" id="copy-btn">Copy for Excel</button>
+      <span class="status-msg" id="copy-msg" role="status"></span>
+    </div>
+    <div class="scroll-x">
+      <table class="results" id="results">
+        <thead>
+          <tr>
+            <th scope="col" rowspan="2">Route</th>
+            <th scope="col" rowspan="2" class="n">Runs</th>
+            <th scope="colgroup" colspan="2" class="group">Price per ride</th>
+            <th scope="colgroup" colspan="3" class="group">Card minus now</th>
+            <th scope="colgroup" colspan="2" class="group" id="hourly-head">Driver $/hour</th>
+          </tr>
+          <tr>
+            <th scope="col" class="n">Now</th>
+            <th scope="col" class="n">Card</th>
+            <th scope="col" class="n">Per ride</th>
+            <th scope="col" class="n">× Runs</th>
+            <th scope="col" id="bar-head">Per ride</th>
+            <th scope="col" class="n">Now</th>
+            <th scope="col" class="n">Card</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+        <tfoot></tfoot>
+      </table>
+    </div>
+    <p class="legend">
+      <span><i class="p"></i>Card is higher than now: underpriced</span>
+      <span><i class="n"></i>Card is lower than now: overpriced</span>
+      <span><i class="band"></i>Within ±$0.50 a ride: on the card</span>
+    </p>
+  </section>
+
+  <section class="panel" aria-labelledby="data-h">
+    <div class="panel-head">
+      <h2 id="data-h">Route data</h2>
+      <p>Up to 20 routes. Price is what one ride on the route charges now; revenue is optional and, when filled in, the fit uses revenue ÷ runs instead of price. Edits are kept in this browser only.</p>
+    </div>
+    <div class="toolbar">
+      <button type="button" class="btn" id="add-btn">Add route</button>
+      <button type="button" class="btn" id="paste-toggle" aria-expanded="false" aria-controls="paste-panel">Paste rides from Excel</button>
+      <button type="button" class="btn" id="restore-btn">Restore sample</button>
+    </div>
+    <div class="paste" id="paste-panel" hidden>
+      <label for="paste-box">Paste ride rows copied from Excel, one row per ride, ideally with the header row. Needed: pickup, dropoff, price, miles and minutes. Optional: a runs column (if each row is already a route) and revenue.</label>
+      <textarea id="paste-box" spellcheck="false" placeholder="Pickup&#9;Dropoff&#9;Price&#9;Miles&#9;Time&#10;Hotel A&#9;Airport&#9;$58.00&#9;21.3&#9;34"></textarea>
+      <div class="toolbar">
+        <button type="button" class="btn primary" id="group-btn">Group rides into routes</button>
+        <button type="button" class="btn" id="paste-cancel">Cancel</button>
+      </div>
+      <div class="paste-preview" id="paste-preview" aria-live="polite" hidden></div>
+    </div>
+    <div class="scroll-x">
+      <table class="inputs" id="inputs">
+        <thead>
+          <tr>
+            <th scope="col" class="n">#</th>
+            <th scope="col" class="w-name">From</th>
+            <th scope="col" class="w-name">To</th>
+            <th scope="col" class="n w-num">Runs</th>
+            <th scope="col" class="n w-num">Price</th>
+            <th scope="col" class="n w-num">Miles</th>
+            <th scope="col" class="n w-num">Minutes</th>
+            <th scope="col" class="n w-num">Revenue</th>
+            <th scope="col"><span class="vh">Remove</span></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <p><b>How the card is fitted.</b> Among all rate cards that bring in exactly the revenue actually collected, it picks the one whose prices sit closest to what each route charges now, with each route counted once per run (least squares). Every rate stays at or above its floor. The exact solver tries each combination of rates held at their floors and solves the rest directly; the network reaches the same card by gradient descent and stops when its own training signal settles, without looking at the exact answer.</p>
+    <p><b>What it leaves out.</b> Willingness to pay. A route priced above the card may be earning a premium riders happily pay; the card only shows where current prices depart from a consistent time-and-distance rule.</p>
+  </footer>
+</div>
+<div class="tip" id="tip" role="tooltip" hidden></div>
+
+<script id="engine">
+/* RateEngine — pure calculation, no DOM.
+   tests/test-engine.mjs extracts this block from the page and runs it under Node. */
+const RateEngine = (() => {
+  const KEYS = ['base', 'mile', 'minute'];
+
+  // Invented for this demo; not anyone's real routes or prices.
+  const SAMPLE = [
+    ['Hotel A', 'Airport', 9, 58, 21.3, 34],
+    ['Hotel A', 'Convention Center', 4, 22, 4.6, 15],
+    ['Hotel A', 'Downtown', 3, 18, 2.4, 13],
+    ['Hotel A', 'Stadium', 2, 34, 9.1, 24],
+    ['Hotel B', 'Airport', 7, 64, 24.6, 31],
+    ['Hotel B', 'Harbor', 3, 28, 6.2, 21],
+    ['Hotel B', 'Museum', 2, 41, 13.8, 22],
+    ['Hotel C', 'Airport', 6, 49, 18.2, 36],
+    ['Hotel C', 'Convention Center', 5, 16, 3.1, 11],
+    ['Hotel C', 'Downtown', 2, 24, 5.7, 19],
+    ['Hotel D', 'Stadium', 3, 38, 12.4, 27],
+    ['Hotel D', 'Harbor', 2, 44, 15.9, 26],
+  ].map(([from, to, runs, price, miles, minutes]) => ({ from, to, runs, price, miles, minutes, revenue: null }));
+
+  const sum = (arr, f) => arr.reduce((s, r, i) => s + f(r, i), 0);
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+  // "$1,234.50", " 7.2 ", "(1.30)", 7.2 → number; blank or junk → null
+  function num(v) {
+    if (v === null || v === undefined) return null;
+    if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+    let s = String(v).replace(/[$,\s]/g, '');
+    if (s === '') return null;
+    const paren = /^\((.*)\)$/.exec(s);
+    if (paren) s = '-' + paren[1];
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  const isBlank = v => v === null || v === undefined || String(v).trim() === '';
+
+  // Route → fitting row. Target price is revenue ÷ runs when revenue is given,
+  // otherwise the listed price (ruled 2026-09-26).
+  function prepare(routes, baseFee) {
+    const rows = [], issues = [];
+    routes.forEach((r, idx) => {
+      if (['from', 'to', 'price', 'runs', 'miles', 'minutes', 'revenue'].every(k => isBlank(r[k]))) return;
+      const runs = num(r.runs), miles = num(r.miles), minutes = num(r.minutes);
+      const price = num(r.price), revenue = num(r.revenue);
+      const bad = [];
+      if (!(runs > 0)) bad.push('runs');
+      if (!(miles >= 0)) bad.push('miles');
+      if (!(minutes > 0)) bad.push('minutes');
+      if (revenue === null && !(price >= 0)) bad.push('price');
+      if (revenue !== null && revenue < 0) bad.push('revenue');
+      if (bad.length) { issues.push({ idx, fields: bad }); return; }
+      const y = revenue !== null ? revenue / runs : price;
+      const mismatch = revenue !== null && price !== null && price > 0 &&
+        Math.abs(revenue / runs - price) / price > 0.01;
+      rows.push({ idx, n: runs, x: [baseFee ? 1 : 0, miles, minutes], y, price,
+        source: revenue !== null ? 'revenue' : 'price', mismatch });
+    });
+    return { rows, issues };
+  }
+
+  function floorsOf(opts) {
+    return KEYS.map(k => {
+      const f = opts.floors ? num(opts.floors[k]) : null;
+      return f === null ? -Infinity : f;
+    });
+  }
+
+  // Gauss-Jordan with partial pivoting; null when singular.
+  function gaussSolve(M, b) {
+    const n = b.length, A = M.map((row, i) => [...row, b[i]]);
+    const scale = Math.max(...A.flat().map(Math.abs), 1e-300);
+    for (let c = 0; c < n; c++) {
+      let p = c;
+      for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+      if (Math.abs(A[p][c]) < 1e-12 * scale) return null;
+      [A[c], A[p]] = [A[p], A[c]];
+      for (let r = 0; r < n; r++) {
+        if (r === c) continue;
+        const f = A[r][c] / A[c][c];
+        for (let k = c; k <= n; k++) A[r][k] -= f * A[c][k];
+      }
+    }
+    return A.map((row, i) => row[n] / row[i]);
+  }
+
+  /* Exact answer. Minimise Σ runs·(target − model)² subject to
+       Σ runs·model = actual revenue   and   each rate ≥ its floor.
+     Convex with ≤3 unknowns, so try every choice of which rates sit on their
+     floors, solve the rest exactly (KKT), keep the best feasible one. */
+  function solveExact(routes, opts = {}) {
+    const baseFee = !!opts.baseFee;
+    const { rows, issues } = prepare(routes, baseFee);
+    const floor = floorsOf(opts);
+    const active = baseFee ? [0, 1, 2] : [1, 2];
+    const N = sum(rows, r => r.n), R = sum(rows, r => r.n * r.y);
+    const out = { rows, issues, N, revenue: R, baseFee, floors: floor, ...diagnose(rows, active) };
+    if (!rows.length) return { ...out, ok: false, reason: 'No usable routes yet.' };
+
+    let best = null;
+    for (let mask = 0; mask < (1 << active.length); mask++) {
+      const fixed = active.filter((_, i) => mask & (1 << i));
+      if (fixed.some(k => floor[k] === -Infinity)) continue;
+      const free = active.filter(k => !fixed.includes(k));
+      const w = [0, 0, 0];
+      fixed.forEach(k => { w[k] = floor[k]; });
+      const yr = rows.map(r => r.y - sum(fixed, k => w[k] * r.x[k]));
+      const Rr = sum(rows, (r, i) => r.n * yr[i]);
+      if (!free.length) {
+        if (Math.abs(Rr) > 1e-9 * Math.max(1, Math.abs(R))) continue;
+      } else {
+        const M = free.map(a => [
+          ...free.map(b => 2 * sum(rows, r => r.n * r.x[a] * r.x[b])),
+          sum(rows, r => r.n * r.x[a])]);
+        M.push([...free.map(k => sum(rows, r => r.n * r.x[k])), 0]);
+        const rhs = [...free.map(a => 2 * sum(rows, (r, i) => r.n * r.x[a] * yr[i])), Rr];
+        const sol = gaussSolve(M, rhs);
+        if (!sol) continue;
+        free.forEach((k, j) => { w[k] = sol[j]; });
+        if (free.some(k => w[k] < floor[k] - 1e-9)) continue;
+      }
+      const sse = sum(rows, r => r.n * (r.y - dot(r.x, w)) ** 2);
+      if (!best || sse < best.sse - 1e-12) best = { w, sse };
+    }
+
+    if (!best) {
+      let reason = 'No rate card can match actual revenue while respecting these floors.';
+      if (active.every(k => Number.isFinite(floor[k]))) {
+        const minRev = sum(rows, r => r.n * sum(active, k => floor[k] * r.x[k]));
+        if (minRev > R) reason = `Floors too high: at the floor rates alone these rides would bring in ${money(minRev)}, more than the ${money(R)} actually collected.`;
+      }
+      return { ...out, ok: false, reason };
+    }
+    const w = best.w;
+    const atFloor = {};
+    KEYS.forEach((k, i) => { atFloor[k] = active.includes(i) && Number.isFinite(floor[i]) && Math.abs(w[i] - floor[i]) < 1e-7; });
+    const modelPrices = routes.map(() => null);
+    rows.forEach(r => { modelPrices[r.idx] = dot(r.x, w); });
+    return { ...out, ok: true,
+      rates: { base: baseFee ? w[0] : 0, mile: w[1], minute: w[2] }, atFloor, modelPrices,
+      modelRevenue: sum(rows, r => r.n * dot(r.x, w)), rms: Math.sqrt(best.sse / N) };
+  }
+
+  /* How well the data can pin the rates down.
+     identifiable: false when several rate cards fit equally well (e.g. one
+       route, or time exactly proportional to distance on every route).
+     spare: routes beyond the number of rates. At 0 the card passes through
+       every route, so nothing can show as over- or underpriced.
+     corr: runs-weighted correlation of miles with minutes. Near ±1 the split
+       between the time and distance rates is poorly determined. */
+  function diagnose(rows, active) {
+    const G = active.map(a => active.map(b => sum(rows, r => r.n * r.x[a] * r.x[b])));
+    const identifiable = rows.length > 0 && gaussSolve(G, active.map(() => 1)) !== null;
+    const N = sum(rows, r => r.n) || 1;
+    const mean = k => sum(rows, r => r.n * r.x[k]) / N;
+    const mm = mean(1), mt = mean(2);
+    const cov = sum(rows, r => r.n * (r.x[1] - mm) * (r.x[2] - mt));
+    const vm = sum(rows, r => r.n * (r.x[1] - mm) ** 2), vt = sum(rows, r => r.n * (r.x[2] - mt) ** 2);
+    const corr = vm > 0 && vt > 0 ? cov / Math.sqrt(vm * vt) : null;
+    return { identifiable, spare: rows.length - active.length, corr };
+  }
+
+  function money(v) {
+    const s = Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return (v < 0 ? '−$' : '$') + s;
+  }
+
+  // Per-route comparison. model > target ⇒ the current price is below the card: underpriced.
+  function analyse(routes, fit, loadFactor = 0.6, tolerance = 0.5) {
+    if (!fit.ok) return [];
+    return fit.rows.map(r => {
+      const model = fit.modelPrices[r.idx], diff = model - r.y;
+      const minutes = r.x[2];
+      return {
+        idx: r.idx, runs: r.n, target: r.y, source: r.source, mismatch: r.mismatch, model, diff,
+        diffTotal: diff * r.n,
+        verdict: Math.abs(diff) < tolerance ? 'on' : diff > 0 ? 'under' : 'over',
+        hourlyNow: r.y / minutes * 60, hourlyModel: model / minutes * 60,
+        loadedNow: r.y / minutes * 60 * loadFactor, loadedModel: model / minutes * 60 * loadFactor,
+      };
+    });
+  }
+
+  /* Ride rows pasted from Excel → routes. One row per ride unless a runs
+     column exists. Rides on the same route are averaged; any spread is flagged. */
+  function splitRow(line, delim) {
+    if (delim === '\t') return line.split('\t');
+    const out = []; let cur = '', q = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (q) { if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; } else if (ch === '"') q = false; else cur += ch; }
+      else if (ch === '"') q = true;
+      else if (ch === ',') { out.push(cur); cur = ''; }
+      else cur += ch;
+    }
+    out.push(cur);
+    return out;
+  }
+
+  const HEAD = {
+    from: /^(pu|pick\s*-?\s*up|from|origin|hotel)\b/i,
+    to: /^(do|drop\s*-?\s*off|to|dest|destination)\b/i,
+    price: /price|fare|charge|amount/i,
+    miles: /mile|distance|dist\b|\bmi\b/i,
+    minutes: /\btime\b|minute|\bmins?\b|duration/i,
+    revenue: /revenue|collected/i,
+    runs: /\bruns?\b|count|trips|rides|qty|quantity/i,
+  };
+  const HEAD_SKIP = /model|avg|average|mph|diff|profit|loss|hourly|effective|load|res\s*#|id\b/i;
+
+  // "Hotel A- 100 First St…" → "Hotel A".
+  // Heuristic only; the full name is kept alongside and names stay editable.
+  function shortName(s) {
+    const full = String(s).replace(/\s+/g, ' ').trim();
+    let cut = full;
+    const paren = cut.indexOf(')');
+    if (paren > 0) cut = cut.slice(0, paren + 1);
+    for (let i = cut.indexOf('-'); i >= 0; i = cut.indexOf('-', i + 1)) {
+      if (i >= 3 && /\d/.test(cut.slice(i))) { cut = cut.slice(0, i); break; }   // hyphen before an address
+    }
+    const digits = /\s\d{3,}/.exec(cut);
+    if (digits && digits.index >= 3) cut = cut.slice(0, digits.index);
+    const street = /\s\S+\s(rd|road|blvd|dr|drive|ave|avenue|st|street|way|pkwy|hwy)\b/i.exec(cut);
+    if (street && street.index >= 3) cut = cut.slice(0, street.index);
+    return cut.replace(/[\s,;:-]+$/, '') || full;
+  }
+
+  function groupRides(text) {
+    const lines = String(text).split(/\r?\n/).filter(l => l.trim() !== '');
+    if (!lines.length) return { ok: false, reason: 'Nothing pasted.' };
+    const delim = lines.some(l => l.includes('\t')) ? '\t' : ',';
+    let cells = lines.map(l => splitRow(l, delim).map(c => c.trim()));
+    const width = Math.max(...cells.map(r => r.length));
+
+    // Header row: map columns by name. No header: first two text columns are
+    // from/to, then the next three numbers are price, miles, minutes.
+    const col = {};
+    const first = cells[0];
+    const looksHeader = first.filter(c => c !== '' && num(c) === null).length >= 3;
+    if (looksHeader) {
+      for (const key of ['from', 'to', 'runs', 'revenue', 'price', 'miles', 'minutes']) {
+        const j = first.findIndex((h, i) => HEAD[key].test(h) && !HEAD_SKIP.test(h) && !Object.values(col).includes(i));
+        if (j >= 0) col[key] = j;
+      }
+      cells = cells.slice(1);
+      const missing = ['from', 'to', 'price', 'miles', 'minutes'].filter(k => !(k in col));
+      if (missing.length) return { ok: false, reason: `Couldn't find a column for: ${missing.join(', ')}. Expected headings like Pickup, Dropoff, Price, Miles, Time.` };
+    } else {
+      const sample = cells[0];
+      const text = [], nums = [];
+      sample.forEach((c, i) => (num(c) === null ? text : nums).push(i));
+      if (text.length < 2) return { ok: false, reason: 'Couldn\'t find pickup and dropoff columns (two text columns).' };
+      col.from = text[0]; col.to = text[1];
+      const after = nums.filter(i => i > col.to);
+      if (after.length < 3) return { ok: false, reason: 'Expected price, miles and minutes after the dropoff column.' };
+      [col.price, col.miles, col.minutes] = after;
+    }
+
+    const groups = new Map(), skipped = [];
+    cells.forEach((r, i) => {
+      const from = r[col.from] || '', to = r[col.to] || '';
+      const price = num(r[col.price]), miles = num(r[col.miles]), minutes = num(r[col.minutes]);
+      const runs = 'runs' in col ? num(r[col.runs]) : 1;
+      const revenue = 'revenue' in col ? num(r[col.revenue]) : null;
+      if (!from || !to || price === null || miles === null || minutes === null || !(runs > 0)) {
+        skipped.push(i + (looksHeader ? 2 : 1)); return;
+      }
+      const key = (from + '|' + to).toLowerCase().replace(/\s+/g, ' ');
+      if (!groups.has(key)) groups.set(key, { from, to, rides: [] });
+      groups.get(key).rides.push({ price, miles, minutes, runs, revenue });
+    });
+
+    const spread = (rides, k) => Math.max(...rides.map(x => x[k])) - Math.min(...rides.map(x => x[k]));
+    const routes = [...groups.values()].map(g => {
+      const n = sum(g.rides, x => x.runs);
+      const avg = k => sum(g.rides, x => x[k] * x.runs) / n;
+      const hasRev = g.rides.some(x => x.revenue !== null);
+      const flags = [];
+      if (spread(g.rides, 'price') > 0.005) flags.push('price varies');
+      if (spread(g.rides, 'miles') > 0.005) flags.push('miles vary');
+      if (spread(g.rides, 'minutes') > 0.005) flags.push('minutes vary');
+      return {
+        from: shortName(g.from), to: shortName(g.to), fromFull: g.from, toFull: g.to,
+        runs: n, price: round2(avg('price')), miles: round2(avg('miles')), minutes: round2(avg('minutes')),
+        revenue: hasRev ? round2(sum(g.rides, x => x.revenue ?? x.price * x.runs)) : null,
+        flags,
+      };
+    });
+    return { ok: true, routes, rides: sum(cells, () => 1) - skipped.length, skipped, columns: col,
+      headers: looksHeader ? first : null };
+  }
+  const round2 = v => Math.round(v * 100) / 100;
+
+  /* Deep linear network: every layer is purely linear (no activation, no
+     bias), so the whole stack collapses to one linear formula and can only
+     ever learn a rate card. Inputs are [trip, miles, minutes]; multiplying all
+     the weight matrices together gives [base fee, $/mile, $/min].
+     Trained by gradient descent (Adam) on the same objective as solveExact,
+     with the revenue match and the floors enforced by an augmented Lagrangian. */
+  function mulberry32(a) {
+    return () => {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  class DeepLinearNet {
+    constructor(sizes = [3, 6, 8, 8, 6, 1], seed = 7, hp = {}) {
+      this.sizes = sizes;
+      // Tuned 2026-09-26 on sample and random route tables.
+      this.hp = { lr: 0.01, mu: 2, every: 25, beta1: 0.9, beta2: 0.999, window: 100, tol: 1e-4, maxSteps: 30000, ...hp };
+      this.init(seed);
+    }
+
+    init(seed) {
+      this.seed = seed;
+      const rand = mulberry32(seed);
+      const gauss = () => {
+        let u = 0; while (u === 0) u = rand();
+        return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rand());
+      };
+      const L = this.sizes.length - 1;
+      this.W = []; this.m = []; this.v = [];
+      for (let l = 0; l < L; l++) {
+        const rows = this.sizes[l + 1], cols = this.sizes[l];
+        this.W.push(Array.from({ length: rows }, () => Array.from({ length: cols }, () => gauss() / Math.sqrt(cols))));
+        this.m.push(Array.from({ length: rows }, () => new Array(cols).fill(0)));
+        this.v.push(Array.from({ length: rows }, () => new Array(cols).fill(0)));
+      }
+      this.resetOptimizer();
+    }
+
+    // Fresh optimiser state; the weights stay where they are (a warm start).
+    resetOptimizer() {
+      for (const M of [...this.m, ...this.v]) for (const row of M) row.fill(0);
+      this.t = 0; this.lambda = 0; this.kappa = [0, 0, 0];
+      this.settledAt = null; this.snap = null;
+    }
+
+    setProblem(routes, opts = {}) {
+      const baseFee = !!opts.baseFee;
+      const { rows } = prepare(routes, baseFee);
+      const N = sum(rows, r => r.n);
+      if (!rows.length) { this.P = null; return false; }
+      const wrms = f => Math.sqrt(sum(rows, r => r.n * f(r) ** 2) / N) || 1;
+      const s = [1, wrms(r => r.x[1]), wrms(r => r.x[2])], py = wrms(r => r.y);
+      const xs = rows.map(r => r.x.map((v, k) => v / s[k])), ys = rows.map(r => r.y / py);
+      const A = [0, 1, 2].map(a => [0, 1, 2].map(b => sum(rows, (r, i) => r.n * xs[i][a] * xs[i][b]) / N));
+      const b = [0, 1, 2].map(a => sum(rows, (r, i) => r.n * xs[i][a] * ys[i]) / N);
+      const c = [0, 1, 2].map(a => sum(rows, (r, i) => r.n * xs[i][a]) / N);
+      const d = sum(rows, (r, i) => r.n * ys[i]) / N;
+      const yy = sum(rows, (r, i) => r.n * ys[i] ** 2) / N;
+      const floor = floorsOf(opts);
+      const phi = floor.map((f, k) => f * s[k] / py);
+      this.P = { A, b, c, d, yy, s, py, phi, N, R: sum(rows, r => r.n * r.y), baseFee,
+        floor, active: baseFee ? [true, true, true] : [false, true, true] };
+      this.resetOptimizer();
+      return true;
+    }
+
+    // right[l] = W[l-1]·…·W[0] (sizes[l] × 3); right[L] is the 1×3 end-to-end map
+    rightProducts() {
+      const right = [[[1, 0, 0], [0, 1, 0], [0, 0, 1]]];
+      for (const W of this.W) {
+        const prev = right[right.length - 1];
+        right.push(W.map(row => [0, 1, 2].map(k => row.reduce((s, w, j) => s + w * prev[j][k], 0))));
+      }
+      return right;
+    }
+
+    effective() { return this.rightProducts()[this.W.length][0]; }
+
+    rates(v = this.effective()) {
+      const { s, py, baseFee } = this.P;
+      return { base: baseFee ? v[0] * py / s[0] : 0, mile: v[1] * py / s[1], minute: v[2] * py / s[2] };
+    }
+
+    gradV(v) {
+      const { A, b, c, d, phi, active } = this.P, { mu } = this.hp;
+      const g = [0, 1, 2].map(a => 2 * (A[a][0] * v[0] + A[a][1] * v[1] + A[a][2] * v[2] - b[a]));
+      const gap = dot(c, v) - d;
+      for (let k = 0; k < 3; k++) {
+        g[k] += (this.lambda + mu * gap) * c[k];
+        if (active[k] && Number.isFinite(phi[k])) {
+          const t = this.kappa[k] + mu * (phi[k] - v[k]);
+          if (t > 0) g[k] -= t;
+        }
+        if (!active[k]) g[k] = 0;
+      }
+      return g;
+    }
+
+    // Runs up to `iters` steps; stops early once settled. Returns true when settled.
+    step(iters = 1) {
+      if (!this.P) return false;
+      const { lr, beta1, beta2, every, mu, window } = this.hp, L = this.W.length;
+      for (let it = 0; it < iters && this.settledAt === null && this.t < this.hp.maxSteps; it++) {
+        const right = this.rightProducts();
+        const v = right[L][0];
+        const G = this.gradV(v);
+        // Backward: left row vector = W[L-1]·…·W[l+1]; dW[l] = leftᵀ ⊗ (G·right[l]ᵀ)
+        let left = [1];
+        const grads = new Array(L);
+        for (let l = L - 1; l >= 0; l--) {
+          const gr = right[l].map(row => row[0] * G[0] + row[1] * G[1] + row[2] * G[2]);
+          grads[l] = left.map(a => gr.map(bv => a * bv));
+          const W = this.W[l];
+          left = W[0].map((_, j) => left.reduce((s, a, i) => s + a * W[i][j], 0));
+        }
+        this.t++;
+        const bc1 = 1 - beta1 ** this.t, bc2 = 1 - beta2 ** this.t;
+        for (let l = 0; l < L; l++) {
+          const W = this.W[l], M = this.m[l], V = this.v[l], D = grads[l];
+          for (let i = 0; i < W.length; i++) for (let j = 0; j < W[i].length; j++) {
+            const g = D[i][j];
+            M[i][j] = beta1 * M[i][j] + (1 - beta1) * g;
+            V[i][j] = beta2 * V[i][j] + (1 - beta2) * g * g;
+            W[i][j] -= lr * (M[i][j] / bc1) / (Math.sqrt(V[i][j] / bc2) + 1e-12);
+          }
+        }
+        if (this.t % every === 0) {
+          const ve = this.effective(), { c, d, phi, active } = this.P;
+          this.lambda += mu * (dot(c, ve) - d);
+          for (let k = 0; k < 3; k++)
+            this.kappa[k] = active[k] && Number.isFinite(phi[k]) ? Math.max(0, this.kappa[k] + mu * (phi[k] - ve[k])) : 0;
+        }
+        if (this.t % window === 0) this.checkSettled();
+      }
+      return this.settledAt !== null;
+    }
+
+    /* What each neuron is doing, for the drawing. Neuron j of layer h
+       (h = 1…5) has a path in from the inputs, right[h][j], and a path out to
+       the price, left[h][j]; their product is the part of the rate card that
+       flows through it. Across any one layer those parts add up to the card. */
+    anatomy() {
+      const L = this.W.length, right = this.rightProducts();
+      const left = new Array(L + 1);
+      left[L] = [1];
+      for (let h = L; h >= 1; h--) {
+        const W = this.W[h - 1];
+        left[h - 1] = W[0].map((_, j) => left[h].reduce((s, a, i) => s + a * W[i][j], 0));
+      }
+      const toRates = v => this.P ? this.rates(v) : { base: v[0], mile: v[1], minute: v[2] };
+      const layers = [];
+      for (let h = 1; h <= L; h++) {
+        layers.push(this.W[h - 1].map((incoming, j) => ({
+          incoming: incoming.slice(),
+          sumIn: incoming.reduce((s, w) => s + w, 0),
+          share: toRates(right[h][j].map(v => v * left[h][j])),
+        })));
+      }
+      return { layers, rates: toRates(left[0]) };
+    }
+
+    get finished() { return this.settledAt !== null || this.t >= this.hp.maxSteps; }
+
+    /* The network's own settle test — it never looks at the exact answer.
+       Adam keeps taking full-size steps after the gradient vanishes and will
+       periodically spike away from the optimum, so training must stop here. */
+    checkSettled() {
+      const st = this.status(), prev = this.snap;
+      this.snap = st.rates;
+      if (!prev) return;
+      const moved = Math.max(...KEYS.map(k => Math.abs(st.rates[k] - prev[k])));
+      const { floor, active } = this.P;
+      const viol = Math.max(0, ...KEYS.map((k, i) => active[i] && Number.isFinite(floor[i]) ? floor[i] - st.rates[k] : 0));
+      if (moved < this.hp.tol && Math.abs(st.revenueGap) < 0.05 && viol < 1e-3) this.settledAt = this.t;
+    }
+
+    // Typical miss per ride in $, and how far model revenue is from actual.
+    status() {
+      const v = this.effective(), { A, b, c, d, yy, py, N } = this.P;
+      const vAv = [0, 1, 2].reduce((s, a) => s + v[a] * (A[a][0] * v[0] + A[a][1] * v[1] + A[a][2] * v[2]), 0);
+      return { rates: this.rates(v), rms: py * Math.sqrt(Math.max(0, vAv - 2 * dot(b, v) + yy)),
+        revenueGap: (dot(c, v) - d) * py * N, steps: this.t };
+    }
+  }
+
+  return { KEYS, SAMPLE, num, prepare, solveExact, analyse, groupRides, shortName, money, DeepLinearNet };
+})();
+</script>
+<script id="app">
+(() => {
+  'use strict';
+  const E = RateEngine, K = E.KEYS;
+  const $ = s => document.querySelector(s);
+  const STORE = 'car-rate-modeler-demo.v1';
+  const MAX_ROUTES = 20, TOL = 0.5;
+  const SPEEDS = { slow: 1, normal: 4, fast: 30 };
+  const FIELDS = ['from', 'to', 'runs', 'price', 'miles', 'minutes', 'revenue'];
+  const RATE = {
+    base: { label: 'Pickup charge', unit: '', tip: 'pickup' },
+    mile: { label: 'Per mile', unit: '/mi', tip: '/mi' },
+    minute: { label: 'Per minute', unit: '/min', tip: '/min' },
+  };
+  const reduceMotion = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const SVGNS = 'http://www.w3.org/2000/svg';
+
+  // ── Formatting ───────────────────────────────────────────────────────────
+  const fixed = (v, d) => Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const isZero = (v, d) => Math.abs(v) < 0.5 * 10 ** -d;
+  const money = (v, d = 2) => (v < 0 && !isZero(v, d) ? '−$' : '$') + fixed(v, d);
+  const signed = (v, d = 2) => isZero(v, d) ? money(0, d) : (v > 0 ? '+' : '') + money(v, d);
+  const wtext = w => (w < 0 ? '−' : '+') + Math.abs(w).toFixed(2);
+  const plural = (n, one, many = one + 's') => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
+  const routeName = r => `${r.from || '(no pickup)'} → ${r.to || '(no dropoff)'}`;
+
+  // ── State (kept in this browser only) ────────────────────────────────────
+  const defaults = () => ({
+    routes: E.SAMPLE.map(r => ({ ...r })),
+    source: 'sample',
+    pickupOn: false,                                  // ruled: toggle, off by default
+    floors: { base: '0.00', mile: '0.00', minute: '0.00' },  // ruled: $0, adjustable
+    lf: 60, bars: 'ride', sort: 'under', speed: 'normal',
+  });
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(STORE));
+      if (s && Array.isArray(s.routes) && s.routes.length <= MAX_ROUTES) return { ...defaults(), ...s };
+    } catch (e) { /* storage unavailable: start from the sample */ }
+    return defaults();
+  }
+  function save() { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* not kept */ } }
+  let state = load();
+  const opts = () => ({ baseFee: state.pickupOn, floors: state.floors });
+
+  let fit = null;
+  const net = new E.DeepLinearNet(undefined, 7);
+  let running = false, rafId = 0, history = [];
+
+  // ── Recompute: exact fit first, then everything that reads it ────────────
+  function recompute({ retrain = true } = {}) {
+    fit = E.solveExact(state.routes, opts());
+    renderPlate(); renderNotes(); renderResults(); markInvalid(); renderChip();
+    if (retrain) restartTraining(false); else renderReadout();
+    save();
+  }
+  let recomputeTimer = 0;
+  const recomputeSoon = () => { clearTimeout(recomputeTimer); recomputeTimer = setTimeout(() => recompute(), 250); };
+
+  // ── Rate card plate ──────────────────────────────────────────────────────
+  function renderPlate() {
+    const ok = fit.ok;
+    for (const k of K) {
+      const row = document.querySelector(`.tariff-row[data-k="${k}"]`), dd = row.querySelector('dd'), dt = row.querySelector('dt');
+      const off = k === 'base' && !state.pickupOn;
+      dt.querySelector('.flag')?.remove();
+      row.classList.toggle('off', off);
+      dd.textContent = '';
+      if (off) { dd.textContent = 'Not used'; continue; }
+      if (!ok) { dd.textContent = '—'; continue; }
+      dd.append(money(fit.rates[k]));
+      if (RATE[k].unit) { const u = document.createElement('span'); u.className = 'unit'; u.textContent = RATE[k].unit; dd.append(u); }
+      if (fit.atFloor[k]) { const f = document.createElement('span'); f.className = 'flag'; f.textContent = 'at floor'; dt.firstChild.after(f); }
+    }
+
+    $('#plate-sub').textContent = fit.rows.length ? `Fitted to ${plural(fit.N, 'ride')} on ${plural(fit.rows.length, 'route')}` : '';
+    const foot = $('#plate-foot');
+    foot.textContent = '';
+    const line = (...parts) => { const p = document.createElement('div'); parts.forEach(x => p.append(x)); foot.append(p); return p; };
+    const b = t => { const e = document.createElement('b'); e.textContent = t; return e; };
+    if (!ok) { line(fit.reason).className = 'plate-error'; return; }
+    line('Brings in ', b(money(fit.modelRevenue)), ' against ', b(money(fit.revenue)), ' actually collected. Typical miss ', b(money(fit.rms)), ' a ride.');
+    // Worked example on the busiest route, so the card reads as arithmetic
+    const busiest = fit.rows.reduce((a, r) => (r.n > a.n ? r : a), fit.rows[0]);
+    const r = state.routes[busiest.idx], R = fit.rates;
+    const terms = [];
+    if (state.pickupOn) terms.push(money(R.base));
+    terms.push(`${busiest.x[1]} mi × ${money(R.mile)}`, `${busiest.x[2]} min × ${money(R.minute)}`);
+    line(`${routeName(r)}: ${terms.join(' + ')} = ${money(fit.modelPrices[busiest.idx])} on the card, ${money(busiest.y)} now.`).className = 'example';
+  }
+
+  // ── Notes: what the fit can and can't tell you ───────────────────────────
+  const ICON = {
+    info: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10" cy="10" r="8"/><path d="M10 9v5" stroke-linecap="round"/><circle cx="10" cy="6.2" r="1" fill="currentColor" stroke="none"/></svg>',
+    warn: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 2.8 18 17H2Z" stroke-linejoin="round"/><path d="M10 8v4.2" stroke-linecap="round"/><circle cx="10" cy="14.6" r="1" fill="currentColor" stroke="none"/></svg>',
+  };
+  ICON.crit = ICON.warn;
+  function renderNotes() {
+    const ul = $('#notes');
+    ul.textContent = '';
+    const add = (level, label, text) => {
+      const li = document.createElement('li');
+      li.className = `note ${level}`;
+      li.innerHTML = ICON[level];
+      const d = document.createElement('div'), s = document.createElement('b');
+      s.textContent = label + ' ';
+      d.append(s, text);
+      li.append(d);
+      ul.append(li);
+    };
+    if (!fit.ok && fit.rows.length) add('crit', 'No rate card fits.', fit.reason);
+    for (const is of fit.issues) add('warn', `Row ${is.idx + 1} is left out.`, `Check ${is.fields.join(', ')}: runs and minutes must be above zero, miles zero or more, and the route needs a price or revenue.`);
+    if (!fit.ok) return;
+    for (const k of K) {
+      if (!fit.atFloor[k]) continue;
+      add('info', `${RATE[k].label} is held at its ${money(fit.floors[K.indexOf(k)])} floor.`,
+        `Left free, the best fit would push it lower, so these rides don't support ${k === 'base' ? 'a pickup charge' : k === 'mile' ? 'a distance charge' : 'a time charge'} on top of the other rates.`);
+    }
+    if (!fit.identifiable) {
+      add('warn', 'These routes can’t pin down every rate.', 'Several rate cards fit them equally well, so the exact solver and the network may settle on different ones. Add routes with a different mix of miles and minutes.');
+    } else if (fit.spare <= 0) {
+      add('warn', 'No more routes than rates.', 'The card passes exactly through every route, so no route can show as over- or underpriced. Add routes or drop the pickup charge.');
+    }
+    if (fit.corr !== null && Math.abs(fit.corr) >= 0.85 && fit.identifiable) {
+      add('info', `Miles and minutes rise together here (correlation ${fit.corr.toFixed(2)}).`, 'The data can’t cleanly separate the per-mile rate from the per-minute rate. Routes where they disagree, such as slow short trips or fast highway runs, would firm up the split.');
+    }
+    const mism = fit.rows.filter(r => r.mismatch);
+    if (mism.length) add('info', `${plural(mism.length, 'route')} fitted on revenue ÷ runs.`, `It differs from the listed price by more than 1% on ${mism.map(r => routeName(state.routes[r.idx])).join('; ')}.`);
+    const spread = state.routes.filter(r => r.flags && r.flags.length);
+    if (spread.length) add('info', `${plural(spread.length, 'route')} averaged from rides that differ.`, spread.map(r => `${routeName(r)} (${r.flags.join(', ')})`).join('; ') + '.');
+  }
+
+  function renderChip() {
+    const rides = fit.N, routes = fit.rows.length;
+    const what = `${plural(rides, 'ride')} on ${plural(routes, 'route')}`;
+    const txt = $('#data-chip-text');
+    txt.textContent = '';
+    const b = document.createElement('b');
+    b.textContent = state.source === 'sample' ? 'Sample data' : state.source === 'pasted' ? 'Pasted data' : 'Your data';
+    txt.append(b, state.source === 'sample' ? ` · ${what}, invented for this demo` : ` · ${what}`);
+  }
+
+  // ── Route by route ───────────────────────────────────────────────────────
+  let lastAnalysis = [];
+  function renderResults() {
+    const tbody = $('#results tbody'), tfoot = $('#results tfoot');
+    tbody.textContent = ''; tfoot.textContent = '';
+    const lfPct = state.lf;
+    $('#hourly-head').textContent = lfPct >= 100 ? 'Driver $/hour, all time paid' : `Driver $/hour at ${lfPct}% load`;
+    $('#bar-head').textContent = state.bars === 'ride' ? 'Per ride' : 'Route total';
+    if (!fit.ok) { $('#route-summary').textContent = fit.rows.length ? 'No rate card fits these routes and floors; see the note above.' : 'Add routes to see how each compares with the card.'; lastAnalysis = []; return; }
+
+    const an = E.analyse(state.routes, fit, lfPct / 100, TOL);
+    lastAnalysis = an;
+    const measure = a => (state.bars === 'ride' ? a.diff : a.diffTotal);
+    const order = an.slice();
+    if (state.sort === 'under') order.sort((a, b) => measure(b) - measure(a));
+    else if (state.sort === 'over') order.sort((a, b) => measure(a) - measure(b));
+    const maxAbs = Math.max(state.bars === 'ride' ? TOL * 2 : 1, ...an.map(a => Math.abs(measure(a))));
+    const half = 85; // px either side of zero in the 170px track
+
+    const cell = (text, cls) => { const td = document.createElement('td'); if (cls) td.className = cls; td.textContent = text; return td; };
+    for (const a of order) {
+      const r = state.routes[a.idx], tr = document.createElement('tr');
+      const rc = document.createElement('td'); rc.className = 'route-cell';
+      const f = document.createElement('div'); f.className = 'from'; f.textContent = r.from || '(no pickup)';
+      const t = document.createElement('div'); t.className = 'to'; t.textContent = r.to || '(no dropoff)';
+      rc.append(f, t);
+      const tags = [];
+      if (a.source === 'revenue') tags.push(a.mismatch ? 'revenue ≠ price × runs' : 'from revenue');
+      if (r.flags && r.flags.length) tags.push(...r.flags);
+      if (tags.length) { const tg = document.createElement('div'); tg.className = 'tags'; tags.forEach(x => { const s = document.createElement('span'); s.className = 'tag'; s.textContent = x; tg.append(s); }); rc.append(tg); }
+      tr.append(rc, cell(String(a.runs), 'n'), cell(money(a.target), 'n'), cell(money(a.model), 'n'),
+        cell(signed(a.diff), 'n'), cell(signed(a.diffTotal), 'n'));
+
+      const bc = document.createElement('td'); bc.className = 'barcell';
+      const wrap = document.createElement('div'); wrap.className = 'barwrap';
+      const track = document.createElement('div'); track.className = 'bar-track'; track.setAttribute('aria-hidden', 'true');
+      if (state.bars === 'ride') { const band = document.createElement('span'); band.className = 'band'; const w = half * TOL / maxAbs; band.style.left = `${half - w}px`; band.style.width = `${2 * w}px`; track.append(band); }
+      const zero = document.createElement('span'); zero.className = 'zero'; track.append(zero);
+      const v = measure(a), len = Math.max(Math.abs(v) / maxAbs * half, isZero(v, 2) ? 0 : 1.5);
+      if (len > 0) { const bar = document.createElement('span'); bar.className = 'bar ' + (v > 0 ? 'p' : 'n'); bar.style.width = `${len}px`; bar.style.left = v > 0 ? `${half}px` : `${half - len}px`; track.append(bar); }
+      const verdict = document.createElement('span'); verdict.className = 'verdict';
+      verdict.textContent = a.verdict === 'on' ? 'On the card' : a.verdict === 'under' ? 'Underpriced' : 'Overpriced';
+      wrap.append(track, verdict); bc.append(wrap);
+      tr.append(bc, cell(money(a.loadedNow), 'n'), cell(money(a.loadedModel), 'n'));
+      tbody.append(tr);
+    }
+    const tot = document.createElement('tr');
+    const nowRev = an.reduce((s, a) => s + a.target * a.runs, 0), cardRev = an.reduce((s, a) => s + a.model * a.runs, 0);
+    tot.append(cell('All routes'), cell(String(an.reduce((s, a) => s + a.runs, 0)), 'n'), cell(money(nowRev), 'n'), cell(money(cardRev), 'n'),
+      cell('', 'n'), cell(signed(an.reduce((s, a) => s + a.diffTotal, 0)), 'n'), cell(''), cell(''), cell(''));
+    tfoot.append(tot);
+
+    const count = v => an.filter(a => a.verdict === v).length;
+    $('#route-summary').textContent = `Against this card, ${plural(count('under'), 'route is', 'routes are')} underpriced, ${count('over')} overpriced and ${count('on')} on the card (within ±$0.50 a ride). The route totals net to $0.00 because the card brings in exactly what was collected.`;
+  }
+
+  // ── The network drawing ──────────────────────────────────────────────────
+  const NET = { x0: 175, x1: 690, cy: 205, labelY: 418 };
+  let netEls = null;
+  const svgEl = (tag, attrs = {}) => { const e = document.createElementNS(SVGNS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); return e; };
+  function buildNet() {
+    const svg = $('#net-svg');
+    svg.textContent = '';
+    const sizes = net.sizes, last = sizes.length - 1;
+    const xs = sizes.map((_, c) => NET.x0 + c * (NET.x1 - NET.x0) / last);
+    const ys = sizes.map((n, c) => { const sp = c === 0 ? 80 : Math.min(45, 360 / n); return Array.from({ length: n }, (_, i) => NET.cy + (i - (n - 1) / 2) * sp); });
+    const gl = svgEl('g'), gn = svgEl('g'), gt = svgEl('g');
+    const lines = net.W.map((W, l) => W.map((row, i) => row.map((_, j) => {
+      const ln = svgEl('line', { x1: xs[l], y1: ys[l][j], x2: xs[l + 1], y2: ys[l + 1][i], class: 'w' });
+      gl.append(ln); return ln;
+    })));
+    const IN = ['Pickup', 'Miles', 'Minutes'], IN_GLYPH = ['$', 'mi', 'min'];
+    const nodes = sizes.map((n, c) => Array.from({ length: n }, (_, i) => {
+      const io = c === 0 || c === last;
+      const g = svgEl('g', { class: 'node' + (io ? ' io' : ''), transform: `translate(${xs[c]} ${ys[c][i]})`, tabindex: '0', role: 'img' });
+      g.setAttribute('aria-label', c === 0 ? `Input: ${IN[i]}` : c === last ? 'Output neuron: price' : `Layer ${c}, neuron ${i + 1}`);
+      g.append(svgEl('circle', { r: io ? 19 : 17 }));
+      const t = svgEl('text'); if (c === 0) t.textContent = IN_GLYPH[i];
+      g.append(t); gn.append(g);
+      const show = () => showNodeTip(c, i, g), hide = () => hideTip();
+      g.addEventListener('pointerenter', show); g.addEventListener('pointerleave', hide);
+      g.addEventListener('focus', show); g.addEventListener('blur', hide);
+      return { g, t };
+    }));
+    const inVals = ys[0].map((y, i) => {
+      const nm = svgEl('text', { x: xs[0] - 30, y: y - 4, class: 'io-name', 'text-anchor': 'end' }); nm.textContent = IN[i];
+      const v = svgEl('text', { x: xs[0] - 30, y: y + 14, class: 'io-val', 'text-anchor': 'end' });
+      gt.append(nm, v); return v;
+    });
+    const outName = svgEl('text', { x: xs[last] + 30, y: ys[last][0] - 4, class: 'io-name' }); outName.textContent = 'Price';
+    const outVal = svgEl('text', { x: xs[last] + 30, y: ys[last][0] + 14, class: 'io-val' }); outVal.textContent = 'per ride';
+    gt.append(outName, outVal);
+    sizes.forEach((n, c) => {
+      const nm = svgEl('text', { x: xs[c], y: NET.labelY, class: 'layer-name' }); nm.textContent = c === 0 ? 'Inputs' : `Layer ${c}`;
+      const ct = svgEl('text', { x: xs[c], y: NET.labelY + 17, class: 'layer-count' }); ct.textContent = c === 0 ? '3 inputs' : plural(n, 'neuron');
+      gt.append(nm, ct);
+    });
+    svg.append(gl, gn, gt);
+    netEls = { lines, nodes, inVals };
+  }
+
+  function drawNet() {
+    if (!netEls) buildNet();
+    let wmax = 1e-9;
+    for (const W of net.W) for (const row of W) for (const w of row) wmax = Math.max(wmax, Math.abs(w));
+    const off = !state.pickupOn;
+    net.W.forEach((W, l) => W.forEach((row, i) => row.forEach((w, j) => {
+      const ln = netEls.lines[l][i][j], rel = Math.min(1, Math.abs(w) / wmax);
+      ln.setAttribute('class', w >= 0 ? 'w p' : 'w n');
+      ln.setAttribute('stroke-width', (0.4 + 3.2 * rel).toFixed(2));
+      ln.setAttribute('stroke-opacity', (l === 0 && j === 0 && off ? 0.05 : 0.14 + 0.72 * rel).toFixed(2));
+    })));
+    const last = net.sizes.length - 1;
+    for (let c = 1; c <= last; c++) net.W[c - 1].forEach((row, i) => {
+      const s = row.reduce((a, w) => a + w, 0), nd = netEls.nodes[c][i];
+      nd.g.setAttribute('class', 'node' + (c === last ? ' io' : s >= 0 ? ' p' : ' n'));
+      nd.t.textContent = wtext(s);
+    });
+    const rates = net.P ? net.rates() : null;
+    K.forEach((k, i) => {
+      netEls.nodes[0][i].g.setAttribute('class', 'node io' + (k === 'base' && off ? ' off' : ''));
+      netEls.inVals[i].textContent = k === 'base' && off ? 'off' : rates ? money(rates[k], 3) + RATE[k].unit : '—';
+    });
+    if (tipTarget && tipTarget.kind === 'node') fillNodeTip();
+  }
+
+  // ── Tooltip (shared by the network and the loss chart) ───────────────────
+  const tip = $('#tip');
+  let tipTarget = null;
+  function tipRow(cls, text) { const d = document.createElement('div'); d.className = cls; d.textContent = text; tip.append(d); }
+  function placeTip(rect) {
+    tip.hidden = false;
+    const tw = tip.offsetWidth, th = tip.offsetHeight, pad = 10;
+    let x = rect.right + pad, y = rect.top + rect.height / 2 - th / 2;
+    if (x + tw > window.innerWidth - pad) x = rect.left - pad - tw;
+    x = Math.max(pad, Math.min(x, window.innerWidth - tw - pad));
+    y = Math.max(pad, Math.min(y, window.innerHeight - th - pad));
+    tip.style.left = `${x}px`; tip.style.top = `${y}px`;
+  }
+  function showNodeTip(c, i, g) { tipTarget = { kind: 'node', c, i, g }; fillNodeTip(); }
+  function fillNodeTip() {
+    const { c, i, g } = tipTarget;
+    tip.textContent = '';
+    const last = net.sizes.length - 1;
+    if (c === 0) {
+      const k = K[i];
+      tipRow('t-title', `Input · ${['Pickup', 'Miles', 'Minutes'][i]}`);
+      if (k === 'base' && !state.pickupOn) tipRow('t-note', 'Switched off: the pickup charge isn’t part of the card.');
+      else if (net.P) {
+        tipRow('t-value', money(net.rates()[k], 3) + (RATE[k].unit || ' a ride'));
+        tipRow('t-note', 'The rate the network gives this input: every path from here to the price, multiplied along and added up.');
+      }
+    } else {
+      const a = net.anatomy(), nrn = a.layers[c - 1][i];
+      tipRow('t-title', c === last ? 'Output neuron · price' : `Layer ${c} · neuron ${i + 1}`);
+      tipRow('t-value', `Σ incoming ${wtext(nrn.sumIn)}`);
+      tipRow('t-mono', 'Weights in: ' + nrn.incoming.map(wtext).join('  '));
+      if (net.P) {
+        const parts = K.filter(k => k !== 'base' || state.pickupOn).map(k => money(nrn.share[k], 2) + RATE[k].tip.replace('pickup', ' pickup'));
+        tipRow('t-note', (c === last ? 'Everything passes through here: ' : 'Share of the card through this neuron: ') + parts.join(' · '));
+      }
+    }
+    placeTip(g.getBoundingClientRect());
+  }
+  function hideTip() { tipTarget = null; tip.hidden = true; }
+
+  // ── Training loop ────────────────────────────────────────────────────────
+  function record() {
+    const st = net.status();
+    const last = history[history.length - 1];
+    if (last && last.t === st.steps) return;
+    history.push({ t: st.steps, rms: st.rms });
+    if (history.length > 1600) history = history.filter((_, i) => i % 2 === 0 || i === history.length - 1);
+  }
+  function restartTraining(fresh) {
+    cancelAnimationFrame(rafId);
+    if (fresh) net.init(Math.floor(Math.random() * 2 ** 31));
+    history = [];
+    running = false;
+    if (fit && fit.ok && net.setProblem(state.routes, opts())) { record(); running = true; rafId = requestAnimationFrame(tick); }
+    else net.P = null;
+    drawNet(); drawLoss(); renderReadout();
+  }
+  function tick() {
+    if (!running) return;
+    let left = reduceMotion ? 5000 : SPEEDS[state.speed];
+    while (left > 0 && !net.finished) { const n = Math.min(left, 10); net.step(n); left -= n; record(); }
+    drawNet(); drawLoss(); renderReadout();
+    if (net.finished) running = false;
+    if (running) rafId = requestAnimationFrame(tick); else renderReadout();
+  }
+
+  function renderReadout() {
+    const pill = $('#net-pill'), msg = $('#net-msg'), btn = $('#train-btn');
+    let kind, label;
+    if (!net.P) { kind = 'waiting'; label = 'Waiting'; }
+    else if (running) { kind = 'training'; label = 'Training'; }
+    else if (net.settledAt !== null) { kind = 'settled'; label = 'Settled'; }
+    else if (net.finished) { kind = 'stopped'; label = 'Stopped'; }
+    else { kind = 'paused'; label = 'Paused'; }
+    pill.className = `pill ${kind}`; pill.textContent = label;
+    $('#net-step').textContent = `Step ${net.P ? net.t.toLocaleString('en-US') : 0}`;
+    btn.textContent = running ? 'Pause' : net.finished ? 'Train again' : 'Resume';
+    btn.disabled = !net.P;
+
+    const body = $('#readout-body');
+    body.textContent = '';
+    const st = net.P ? net.status() : null;
+    let worst = 0;
+    for (const k of K) {
+      const tr = document.createElement('tr'), off = k === 'base' && !state.pickupOn;
+      const td = t => { const e = document.createElement('td'); e.textContent = t; return e; };
+      if (off) { tr.className = 'off'; tr.append(td(RATE[k].label), td('not used'), td(''), td('')); }
+      else {
+        const nv = st ? st.rates[k] : null, ev = fit && fit.ok ? fit.rates[k] : null;
+        const gap = nv !== null && ev !== null ? Math.abs(nv - ev) : null;
+        if (gap !== null) worst = Math.max(worst, gap);
+        tr.append(td(RATE[k].label), td(nv === null ? '—' : money(nv, 3)), td(ev === null ? '—' : money(ev, 3)),
+          td(gap === null ? '—' : `${(gap * 100).toFixed(2)}¢`));
+      }
+      body.append(tr);
+    }
+    const rl = $('#revenue-line');
+    rl.textContent = st && fit.ok ? `Revenue on the network’s card: ${money(fit.revenue + st.revenueGap)} against ${money(fit.revenue)} collected.` : '';
+
+    if (!net.P) msg.textContent = fit && fit.rows.length ? 'Nothing to train on until a rate card fits.' : 'Add routes to train the network.';
+    else if (kind === 'settled') msg.textContent = !fit.identifiable
+      ? `Settled at step ${net.settledAt.toLocaleString('en-US')} on a card that fits as well as the exact one. This data can’t tell them apart.`
+      : `Settled at step ${net.settledAt.toLocaleString('en-US')}, ${(worst * 100).toFixed(2)}¢ from the exact answer on its furthest rate.`;
+    else if (kind === 'stopped') msg.textContent = `Stopped at ${net.t.toLocaleString('en-US')} steps without settling. The exact card above stands; the network was still closing in.`;
+    else if (kind === 'training') msg.textContent = 'Adjusting its weights to shrink the miss on every ride while matching total revenue.';
+    else msg.textContent = 'Paused. Resume to keep training.';
+  }
+
+  // ── Loss chart ───────────────────────────────────────────────────────────
+  let lossHoverX = null;
+  function niceCeil(v) {
+    if (!(v > 0)) return 1;
+    const p = 10 ** Math.floor(Math.log10(v)), m = v / p;
+    return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p;
+  }
+  function drawLoss() {
+    const svg = $('#loss-svg');
+    svg.textContent = '';
+    const L = 40, R = 312, T = 10, B = 108;
+    if (!history.length || !fit || !fit.ok) {
+      const t = svgEl('text', { x: 160, y: 64, class: 'empty', 'text-anchor': 'middle' }); t.textContent = 'Starts when the network trains.'; svg.append(t); return;
+    }
+    const tMax = Math.max(100, history[history.length - 1].t);
+    const yTop = niceCeil(Math.max(fit.rms * 1.2, ...history.map(h => h.rms)));
+    const x = t => L + (R - L) * t / tMax, y = v => B - (B - T) * Math.min(v, yTop) / yTop;
+    for (const v of [0, yTop / 2, yTop]) {
+      svg.append(svgEl('line', { x1: L, x2: R, y1: y(v), y2: y(v), class: v === 0 ? 'axis' : 'grid' }));
+      const t = svgEl('text', { x: L - 6, y: y(v) + 3.5, class: 'tick', 'text-anchor': 'end' }); t.textContent = '$' + (yTop >= 10 ? Math.round(v) : v.toFixed(v % 1 ? 1 : 0)); svg.append(t);
+    }
+    const x0 = svgEl('text', { x: L, y: B + 16, class: 'tick' }); x0.textContent = '0';
+    const x1 = svgEl('text', { x: R, y: B + 16, class: 'tick', 'text-anchor': 'end' }); x1.textContent = `${tMax.toLocaleString('en-US')} steps`;
+    svg.append(x0, x1);
+    // the best any card can do: the exact fit's typical miss
+    svg.append(svgEl('line', { x1: L, x2: R, y1: y(fit.rms), y2: y(fit.rms), class: 'ref' }));
+    const rl = svgEl('text', { x: R, y: y(fit.rms) - 5, class: 'ref-label', 'text-anchor': 'end' }); rl.textContent = `Exact card ${money(fit.rms)}`; svg.append(rl);
+    const stride = Math.max(1, Math.ceil(history.length / 300));
+    const pts = history.filter((_, i) => i % stride === 0 || i === history.length - 1).map(h => [x(h.t), y(h.rms)]);
+    const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('');
+    svg.append(svgEl('path', { d: `${d}L${pts[pts.length - 1][0].toFixed(1)} ${B}L${pts[0][0].toFixed(1)} ${B}Z`, class: 'area' }));
+    svg.append(svgEl('path', { d, class: 'curve' }));
+    const e = pts[pts.length - 1];
+    svg.append(svgEl('circle', { cx: e[0], cy: e[1], r: 4, class: 'end' }));
+    if (lossHoverX !== null) {
+      const tq = Math.max(0, Math.min(tMax, (lossHoverX - L) / (R - L) * tMax));
+      let best = history[0];
+      for (const h of history) if (Math.abs(h.t - tq) < Math.abs(best.t - tq)) best = h;
+      svg.append(svgEl('line', { x1: x(best.t), x2: x(best.t), y1: T, y2: B, class: 'cross' }));
+      svg.append(svgEl('circle', { cx: x(best.t), cy: y(best.rms), r: 4, class: 'end' }));
+      tip.textContent = '';
+      tipRow('t-value', `${money(best.rms)} typical miss`);
+      tipRow('t-title', `Step ${best.t.toLocaleString('en-US')}`);
+      const sr = svg.getBoundingClientRect(), px = sr.left + x(best.t) / 320 * sr.width, py = sr.top + y(best.rms) / 136 * sr.height;
+      placeTip({ left: px - 4, right: px + 4, top: py - 4, height: 8 });
+    }
+  }
+  const lossSvg = $('#loss-svg');
+  lossSvg.addEventListener('pointermove', ev => {
+    const r = lossSvg.getBoundingClientRect();
+    lossHoverX = (ev.clientX - r.left) / r.width * 320;
+    tipTarget = { kind: 'loss' };
+    drawLoss();
+  });
+  lossSvg.addEventListener('pointerleave', () => { lossHoverX = null; hideTip(); drawLoss(); });
+
+  // ── Route data table ─────────────────────────────────────────────────────
+  function renderInputs() {
+    const tb = $('#inputs tbody');
+    tb.textContent = '';
+    state.routes.forEach((r, i) => {
+      const tr = document.createElement('tr');
+      const idx = document.createElement('td'); idx.className = 'idx'; idx.textContent = String(i + 1); tr.append(idx);
+      for (const f of FIELDS) {
+        const td = document.createElement('td'), inp = document.createElement('input');
+        inp.id = `r${i}-${f}`;
+        inp.value = r[f] === null || r[f] === undefined ? '' : String(r[f]);
+        inp.autocomplete = 'off';
+        if (f === 'from' || f === 'to') { inp.type = 'text'; if (r[f + 'Full']) inp.title = r[f + 'Full']; }
+        else { inp.inputMode = 'decimal'; inp.className = 'n'; if (f === 'revenue') inp.placeholder = 'optional'; }
+        inp.setAttribute('aria-label', `Route ${i + 1} ${f === 'from' ? 'pickup' : f === 'to' ? 'dropoff' : f}`);
+        td.append(inp); tr.append(td);
+      }
+      const td = document.createElement('td'), del = document.createElement('button');
+      del.type = 'button'; del.className = 'icon-btn'; del.dataset.del = String(i);
+      del.setAttribute('aria-label', `Remove route ${i + 1}`);
+      del.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+      td.append(del); tr.append(td);
+      tb.append(tr);
+    });
+    const add = $('#add-btn');
+    add.disabled = state.routes.length >= MAX_ROUTES;
+    add.textContent = state.routes.length >= MAX_ROUTES ? 'Table full (20 routes)' : `Add route (${state.routes.length} of ${MAX_ROUTES})`;
+  }
+  function markInvalid() {
+    document.querySelectorAll('#inputs input[aria-invalid]').forEach(e => e.removeAttribute('aria-invalid'));
+    for (const is of fit.issues) for (const f of is.fields) $(`#r${is.idx}-${f}`)?.setAttribute('aria-invalid', 'true');
+  }
+  $('#inputs tbody').addEventListener('input', ev => {
+    const m = /^r(\d+)-(\w+)$/.exec(ev.target.id);
+    if (!m) return;
+    const r = state.routes[+m[1]];
+    r[m[2]] = ev.target.value;
+    delete r.flags; delete r[m[2] + 'Full'];
+    if (state.source !== 'edited') state.source = 'edited';
+    recomputeSoon();
+  });
+  $('#inputs tbody').addEventListener('click', ev => {
+    const b = ev.target.closest('[data-del]');
+    if (!b) return;
+    state.routes.splice(+b.dataset.del, 1);
+    state.source = 'edited';
+    renderInputs(); recompute();
+  });
+  $('#add-btn').addEventListener('click', () => {
+    if (state.routes.length >= MAX_ROUTES) return;
+    state.routes.push({ from: '', to: '', runs: '', price: '', miles: '', minutes: '', revenue: '' });
+    state.source = 'edited';
+    renderInputs(); save();
+    $(`#r${state.routes.length - 1}-from`).focus();
+  });
+  let restoreArmed = 0;
+  $('#restore-btn').addEventListener('click', () => {
+    const btn = $('#restore-btn');
+    if (state.source !== 'sample' && !restoreArmed) {
+      btn.textContent = 'Replace your routes with the sample?';
+      btn.classList.add('warn-confirm');
+      restoreArmed = setTimeout(() => { restoreArmed = 0; btn.textContent = 'Restore sample'; btn.classList.remove('warn-confirm'); }, 4000);
+      return;
+    }
+    clearTimeout(restoreArmed); restoreArmed = 0;
+    btn.textContent = 'Restore sample'; btn.classList.remove('warn-confirm');
+    state.routes = E.SAMPLE.map(r => ({ ...r }));
+    state.source = 'sample';
+    renderInputs(); recompute();
+  });
+
+  // ── Paste rides ──────────────────────────────────────────────────────────
+  let pending = null;
+  const pastePanel = $('#paste-panel'), preview = $('#paste-preview');
+  function setPaste(open) {
+    pastePanel.hidden = !open;
+    $('#paste-toggle').setAttribute('aria-expanded', String(open));
+    if (open) $('#paste-box').focus(); else { preview.hidden = true; pending = null; }
+  }
+  $('#paste-toggle').addEventListener('click', () => setPaste(pastePanel.hidden));
+  $('#paste-cancel').addEventListener('click', () => setPaste(false));
+  $('#group-btn').addEventListener('click', () => {
+    const g = E.groupRides($('#paste-box').value);
+    preview.hidden = false; preview.textContent = ''; preview.classList.remove('error'); pending = null;
+    const p = t => { const e = document.createElement('p'); e.style.margin = '0'; e.textContent = t; preview.append(e); return e; };
+    if (!g.ok) { preview.classList.add('error'); p(g.reason); return; }
+    if (g.routes.length > MAX_ROUTES) { preview.classList.add('error'); p(`Found ${plural(g.routes.length, 'route')}; the table holds ${MAX_ROUTES}. Paste fewer rides, or combine routes in Excel first.`); return; }
+    p(`Found ${plural(g.rides, 'ride')} on ${plural(g.routes.length, 'route')}.`);
+    if (g.headers) {
+      const names = { from: 'pickup', to: 'dropoff', price: 'price', miles: 'miles', minutes: 'minutes', runs: 'runs', revenue: 'revenue' };
+      p('Read ' + Object.entries(g.columns).map(([k, j]) => `${names[k]} from “${g.headers[j]}”`).join(', ') + '.');
+    } else p('No header row, so the first two text columns are read as pickup and dropoff, then price, miles and minutes.');
+    if (g.skipped.length) p(`Skipped ${plural(g.skipped.length, 'row')} with missing values: ${g.skipped.slice(0, 12).join(', ')}${g.skipped.length > 12 ? '…' : ''}.`);
+    const flagged = g.routes.filter(r => r.flags.length);
+    if (flagged.length) {
+      p(`${plural(flagged.length, 'route')} had rides that differ and were averaged:`);
+      const ul = document.createElement('ul');
+      flagged.forEach(r => { const li = document.createElement('li'); li.textContent = `${routeName(r)}: ${r.flags.join(', ')}`; ul.append(li); });
+      preview.append(ul);
+    }
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'btn primary'; btn.textContent = `Replace the table with these ${plural(g.routes.length, 'route')}`;
+    btn.addEventListener('click', () => {
+      state.routes = pending.routes.map(r => ({ from: r.from, to: r.to, fromFull: r.fromFull, toFull: r.toFull, runs: r.runs, price: r.price, miles: r.miles, minutes: r.minutes, revenue: r.revenue, flags: r.flags }));
+      state.source = 'pasted';
+      setPaste(false); $('#paste-box').value = '';
+      renderInputs(); recompute();
+    });
+    const row = document.createElement('div'); row.append(btn); preview.append(row);
+    pending = g;
+  });
+
+  // ── Settings & controls ──────────────────────────────────────────────────
+  function syncControls() {
+    $('#pickup-on').checked = state.pickupOn;
+    for (const k of K) $(`#floor-${k}`).value = state.floors[k];
+    $('#floor-base').disabled = !state.pickupOn;
+    $('#lf').value = state.lf; $('#lf-out').textContent = `${state.lf}%`;
+    $(`#bars-${state.bars}`).checked = true;
+    $('#sort').value = state.sort;
+    $(`#speed-${state.speed}`).checked = true;
+  }
+  $('#pickup-on').addEventListener('change', e => { state.pickupOn = e.target.checked; $('#floor-base').disabled = !state.pickupOn; recompute(); });
+  for (const k of K) $(`#floor-${k}`).addEventListener('input', e => {
+    const raw = e.target.value.trim(), ok = raw === '' || E.num(raw) !== null;
+    if (ok) e.target.removeAttribute('aria-invalid'); else e.target.setAttribute('aria-invalid', 'true');
+    if (!ok) return;           // keep the last valid floor until this one parses
+    state.floors[k] = raw;
+    recomputeSoon();
+  });
+  $('#lf').addEventListener('input', e => { state.lf = +e.target.value; $('#lf-out').textContent = `${state.lf}%`; renderResults(); save(); });
+  document.querySelectorAll('input[name="bars"]').forEach(r => r.addEventListener('change', e => { state.bars = e.target.value; renderResults(); save(); }));
+  $('#sort').addEventListener('change', e => { state.sort = e.target.value; renderResults(); save(); });
+  document.querySelectorAll('input[name="speed"]').forEach(r => r.addEventListener('change', e => { state.speed = e.target.value; save(); }));
+  $('#train-btn').addEventListener('click', () => {
+    if (running) { running = false; cancelAnimationFrame(rafId); renderReadout(); return; }
+    if (net.finished) { restartTraining(true); return; }
+    if (net.P) { running = true; rafId = requestAnimationFrame(tick); renderReadout(); }
+  });
+  $('#restart-btn').addEventListener('click', () => restartTraining(true));
+
+  // ── Copy for Excel ───────────────────────────────────────────────────────
+  $('#copy-btn').addEventListener('click', () => {
+    const msg = $('#copy-msg');
+    if (!fit.ok) { msg.textContent = 'Nothing to copy until a rate card fits.'; return; }
+    const r2 = v => v.toFixed(2);
+    const lines = [
+      ['Rate card', state.pickupOn ? `Pickup ${r2(fit.rates.base)}` : 'No pickup charge', `Per mile ${r2(fit.rates.mile)}`, `Per minute ${r2(fit.rates.minute)}`].join('\t'),
+      '',
+      ['From', 'To', 'Runs', 'Now per ride', 'Card per ride', 'Card minus now per ride', 'Card minus now x runs', 'Verdict', `Driver $/hr now (${state.lf}% load)`, `Driver $/hr card (${state.lf}% load)`].join('\t'),
+      ...lastAnalysis.map(a => { const r = state.routes[a.idx]; return [r.from, r.to, a.runs, r2(a.target), r2(a.model), r2(a.diff), r2(a.diffTotal), a.verdict === 'on' ? 'On the card' : a.verdict === 'under' ? 'Underpriced' : 'Overpriced', r2(a.loadedNow), r2(a.loadedModel)].join('\t'); }),
+    ];
+    const text = lines.join('\n');
+    const fallback = () => {
+      const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.append(ta); ta.select();
+      let ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      ta.remove();
+      msg.textContent = ok ? 'Copied. Paste into Excel.' : 'Your browser blocked copying. Select the table and copy it instead.';
+    };
+    try { navigator.clipboard.writeText(text).then(() => { msg.textContent = 'Copied. Paste into Excel.'; }, fallback); } catch (e) { fallback(); }
+  });
+
+  // ── Start ────────────────────────────────────────────────────────────────
+  window.addEventListener('scroll', () => { if (tipTarget && tipTarget.kind === 'node') hideTip(); }, { passive: true });
+  syncControls();
+  renderInputs();
+  buildNet();
+  recompute();
+})();
+</script>

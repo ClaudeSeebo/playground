@@ -1,0 +1,3351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Harmony Dispatch Simulator</title>
+<meta name="description" content="Harmony auto-dispatch simulator. Every number on screen is computed by the optimizer. Try to break it.">
+<style>
+/* Harmony — design language.
+   Dark operations console. Density over decoration. Colour carries meaning:
+   teal is the system speaking, amber is risk, red is a broken constraint,
+   violet is a proposal that has not been accepted yet. */
+
+:root{
+  color-scheme:dark;   /* the page commits to a dark console; tell the host chrome */
+  --bg:#080b0f; --bg2:#0d1218; --panel:#111823; --panel2:#141d29;
+  --line:#1e2a38; --line2:#27384a;
+  --ink:#e8eef5; --ink2:#93a5b8; --ink3:#5f7286;
+  --teal:#2fdcc4; --teal-d:#0f3f3a;
+  --amber:#f7b955; --amber-d:#3d2f13;
+  --red:#ff5f6d; --red-d:#3d1720;
+  --violet:#9b8cff; --violet-d:#241f45;
+  --gold:#e9c777;
+  --arrival:#3aa9ff; --departure:#5ad2a0; --waitreturn:#c68cf0; --hourly:#8fa2b8;
+  /* trip lifecycle - a deliberate ramp, not five arbitrary hues:
+     dormant slate -> in motion -> waiting at the curb -> client aboard -> receded */
+  --st-dispatched:#5c6b7e; --st-enroute:#3f93d8; --st-onlocation:#e08a3c;
+  --st-onboard:#2fbf9e;    --st-complete:#2c3a44; --st-missed:#ff5f6d;
+  --st-unassigned:#7a5560; --st-affiliate:#6b6480;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Mono",Menlo,Consolas,monospace;
+  --sans:"Inter","Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif;
+  --rowh:34px;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--sans);
+  font-size:13px; line-height:1.45; -webkit-font-smoothing:antialiased;
+  font-variant-numeric:tabular-nums;
+  display:flex; flex-direction:column; min-height:100vh;
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;font-variant-numeric:tabular-nums}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
+.eyebrow{margin:0 0 6px;font:600 10px/1 var(--mono);letter-spacing:.14em;color:var(--ink3)}
+.hidden{display:none !important}
+
+/* ---------- top bar ---------- */
+.top{
+  display:flex;align-items:center;gap:22px;padding:0 18px;height:54px;
+  background:linear-gradient(180deg,#0e141c,#0a0f15);
+  border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40;
+}
+.brand{display:flex;align-items:center;gap:9px;flex:0 0 auto}
+.mark{display:flex;flex-direction:column;gap:2.5px;width:19px}
+.mark i{display:block;height:3px;border-radius:2px;background:var(--teal);margin-left:auto;
+  animation:settle 5s ease-in-out infinite}
+.mark i:nth-child(1){width:100%;animation-delay:0s}
+.mark i:nth-child(2){width:62%;animation-delay:.35s}
+.mark i:nth-child(3){width:82%;animation-delay:.7s}
+@keyframes settle{0%,72%,100%{width:100%}18%{width:52%}40%{width:78%}}
+.wordmark{font:600 17px/1 var(--sans);letter-spacing:-.02em}
+.tag{font:600 9px/1 var(--mono);letter-spacing:.16em;color:var(--ink3);
+  border:1px solid var(--line2);border-radius:3px;padding:4px 6px}
+
+.days{display:flex;gap:6px;flex:1 1 auto}
+.days button{
+  display:flex;flex-direction:column;gap:1px;padding:6px 12px;border-radius:6px;
+  border:1px solid var(--line);background:var(--panel);min-width:132px;text-align:left;
+  transition:border-color .15s,background .15s;
+}
+.days button:hover{border-color:var(--line2)}
+.days button b{font:600 12px/1.3 var(--sans)}
+.days button small{font:500 10px/1.3 var(--mono);color:var(--ink3);letter-spacing:.04em}
+.days button.on{background:#16222f;border-color:var(--teal);box-shadow:inset 0 0 0 1px rgba(47,220,196,.18)}
+.days button.on small{color:var(--teal)}
+.days button.hard.on{border-color:var(--red)} .days button.hard.on small{color:var(--red)}
+
+.topright{display:flex;align-items:center;gap:14px}
+.clockbox{display:flex;align-items:center;gap:9px}
+.clockval{font:600 17px/1 var(--mono);letter-spacing:.02em}
+.speeds{display:flex;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.speeds button{padding:4px 8px;font:600 10px/1 var(--mono);color:var(--ink3)}
+.speeds button.on{background:var(--teal-d);color:var(--teal)}
+.statepill{display:flex;align-items:center;gap:7px;padding:6px 11px;border-radius:20px;
+  border:1px solid var(--teal);background:rgba(47,220,196,.08);
+  font:600 10px/1 var(--mono);letter-spacing:.1em;color:var(--teal);white-space:nowrap}
+.statepill i{width:6px;height:6px;border-radius:50%;background:currentColor;
+  box-shadow:0 0 0 0 currentColor;animation:beat 2.4s infinite}
+@keyframes beat{0%{box-shadow:0 0 0 0 rgba(47,220,196,.5)}70%{box-shadow:0 0 0 7px rgba(47,220,196,0)}100%{box-shadow:0 0 0 0 rgba(47,220,196,0)}}
+.statepill.risk{border-color:var(--amber);background:rgba(247,185,85,.08);color:var(--amber)}
+.statepill.bad{border-color:var(--red);background:rgba(255,95,109,.08);color:var(--red)}
+
+/* ---------- brief ---------- */
+.brief{padding:11px 18px;border-bottom:1px solid var(--line);background:var(--bg2);
+  color:var(--ink2);font-size:12.5px;max-width:1600px}
+.brief b{color:var(--ink)}
+
+/* ---------- KPI strip ---------- */
+.kpis{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--line);
+  border-bottom:1px solid var(--line)}
+.kpi{background:var(--bg2);padding:10px 14px;min-width:0}
+.kpi span{display:block;font:600 9px/1 var(--mono);letter-spacing:.11em;color:var(--ink3);margin-bottom:6px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi strong{display:block;font:600 21px/1.1 var(--sans);letter-spacing:-.02em}
+.kpi em{display:block;font:500 10.5px/1.4 var(--mono);color:var(--ink3);font-style:normal;margin-top:3px}
+.kpi em.up{color:var(--teal)} .kpi em.down{color:var(--red)} .kpi em.warn{color:var(--amber)}
+.kpi strong.warn{color:var(--amber)} .kpi strong.bad{color:var(--red)} .kpi strong.good{color:var(--teal)}
+
+/* ---------- stage ---------- */
+.stage{display:grid;grid-template-columns:minmax(0,1fr) 372px;gap:1px;background:var(--line);flex:1 1 auto;min-height:0}
+.board{background:var(--bg);display:flex;flex-direction:column;min-width:0;min-height:0}
+.boardhead{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;
+  padding:12px 16px 10px;border-bottom:1px solid var(--line)}
+.boardhead h2{font-size:14px}
+.boardhead p{margin:2px 0 0;font:500 11px/1 var(--mono);color:var(--ink3)}
+.boardtools{display:flex;flex-direction:column;align-items:flex-end;gap:7px}
+.key{display:flex;gap:11px;flex-wrap:wrap;justify-content:flex-end}
+.key span{display:flex;align-items:center;gap:5px;font:500 10px/1 var(--mono);color:var(--ink3)}
+.sw{width:11px;height:8px;border-radius:2px;display:block}
+.sw.st-dispatched{background:var(--st-dispatched)} .sw.st-enroute{background:var(--st-enroute)}
+.sw.st-onlocation{background:var(--st-onlocation)} .sw.st-onboard{background:var(--st-onboard)}
+.sw.st-complete{background:var(--st-complete)}
+.sw.vipk{background:var(--gold);height:11px;width:11px;transform:rotate(45deg);border-radius:2px}
+.sw.ghostk{background:transparent;border:1px dashed var(--violet);height:9px}
+.bubbles{display:flex;gap:5px;align-items:center}
+.bub{border:1px solid var(--line2);border-radius:999px;padding:5px 12px;
+  font:600 10px/1 var(--mono);letter-spacing:.08em;color:var(--ink3);
+  transition:border-color .15s,color .15s,background .15s}
+.bub:hover{border-color:var(--ink3);color:var(--ink2)}
+.bub.on{border-color:var(--teal);color:var(--teal);background:rgba(47,220,196,.09)}
+.bub.auto.on{border-color:var(--violet);color:var(--violet);background:rgba(155,140,255,.1)}
+.bub.near{border-color:var(--violet);color:var(--violet);background:rgba(155,140,255,.07)}
+.angleread{font:600 9px/1 var(--mono);letter-spacing:.1em;color:var(--ink3);
+  min-width:118px;text-align:right;white-space:nowrap}
+.gear{width:26px;height:26px;border:1px solid var(--line2);border-radius:6px;color:var(--ink3);
+  font-size:13px;line-height:1;transition:border-color .15s,color .15s}
+.gear:hover{border-color:var(--teal);color:var(--teal)}
+
+/* ---------- board setup popover ----------
+   Anchored to the board, not a modal: colour and speed are judged by looking at
+   the bars, so the bars have to stay visible while they change. */
+.board{position:relative}
+.setup{position:absolute;top:4px;right:16px;z-index:30;width:310px;
+  background:var(--panel);border:1px solid var(--line2);border-radius:8px;
+  padding:14px 16px 16px;box-shadow:0 18px 50px rgba(0,0,0,.6)}
+.setup[hidden]{display:none}
+.setuphead{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.setuphead b{font:600 12px/1 var(--sans)}
+.setupclose{font-size:19px;color:var(--ink3);line-height:1}
+.setupclose:hover{color:var(--ink)}
+.setup h5{margin:16px 0 7px;font:600 9px/1 var(--mono);letter-spacing:.13em;color:var(--ink3);
+  padding-bottom:6px;border-bottom:1px solid var(--line)}
+.setupnote{margin:6px 0 0;font:500 10px/1.5 var(--sans);color:var(--ink3)}
+.slots{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.slot{display:flex;align-items:center;gap:8px}
+.slotno{flex:0 0 16px;font:600 10px/1 var(--mono);color:var(--ink3);text-align:center}
+.slot select{flex:1 1 auto;min-width:0;background:var(--panel2);color:var(--ink);
+  border:1px solid var(--line2);border-radius:5px;padding:6px 7px;font:500 11px/1 var(--sans)}
+.slot input[type=color]{flex:0 0 30px;height:26px;padding:0;border:1px solid var(--line2);
+  border-radius:5px;background:var(--panel2);cursor:pointer}
+.bystatus{flex:0 0 auto;font:600 8.5px/1 var(--mono);letter-spacing:.06em;color:var(--ink3);
+  border:1px dashed var(--line2);border-radius:5px;padding:7px 4px}
+.segrow{display:flex;gap:5px}
+.segrow button{flex:1;border:1px solid var(--line);background:var(--panel2);border-radius:5px;
+  padding:7px 5px;font:600 9.5px/1.2 var(--mono);color:var(--ink3)}
+.segrow button.on{border-color:var(--teal);color:var(--teal);background:#132824}
+.sliderow{display:flex;align-items:center;gap:10px}
+.sliderow input[type=range]{flex:1 1 auto;accent-color:var(--teal);min-width:0}
+#spdRead{flex:0 0 auto;font:600 10px/1 var(--mono);color:var(--ink2);min-width:78px;text-align:right}
+.keyrow{display:flex;align-items:center;gap:14px;justify-content:flex-end;flex-wrap:wrap}
+.filter{display:flex;align-items:center;gap:6px;font:500 10.5px/1 var(--mono);color:var(--ink2);cursor:pointer}
+.filter input{accent-color:var(--teal);margin:0}
+
+.axis{position:relative;height:22px;margin-left:150px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.axis b{position:absolute;top:5px;transform:translateX(-50%);font:500 10px/1 var(--mono);color:var(--ink3)}
+.axis i{position:absolute;top:0;bottom:0;width:1px;background:var(--line)}
+
+.gridwrap{position:relative;overflow-y:auto;overflow-x:hidden;flex:1 1 auto;min-height:0}
+.rows{position:relative}
+.vrow{display:flex;height:var(--rowh);border-bottom:1px solid rgba(30,42,56,.55);position:relative}
+.vrow:hover{background:rgba(255,255,255,.014)}
+.vrow.oos{background:repeating-linear-gradient(135deg,transparent 0 8px,rgba(255,95,109,.055) 8px 16px)}
+.vrow.drop{background:rgba(47,220,196,.07);box-shadow:inset 0 0 0 1px var(--teal)}
+.vrow.nodrop{background:rgba(255,95,109,.07);box-shadow:inset 0 0 0 1px var(--red)}
+.vlabel{flex:0 0 150px;display:flex;align-items:center;gap:8px;padding:0 10px;
+  border-right:1px solid var(--line);min-width:0;position:sticky;left:0;background:var(--bg);z-index:2}
+.vrow:hover .vlabel{background:#0a0f14}
+.vlabel .cls{font:600 9px/1 var(--mono);padding:3px 4px;border-radius:3px;letter-spacing:.05em;flex:0 0 auto}
+.cls.sedan{background:#17242f;color:#79a9c9} .cls.suv{background:#1a2333;color:#8f9ff0}
+.cls.van{background:#231e33;color:#bb96e6}
+.vmeta{min-width:0;line-height:1.25}
+.vmeta b{display:block;font:600 11px/1.2 var(--mono);letter-spacing:.02em}
+.vmeta small{display:block;font:500 9.5px/1.2 var(--sans);color:var(--ink3);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vmeta small.t3{color:var(--gold)} .vmeta small.t1{color:var(--ink3)}
+.vmeta small.none{color:var(--red)}
+.track{position:relative;flex:1 1 auto;min-width:0}
+
+/* ---------- trip prism ----------
+   The bar is a triangular prism turning on its long axis. Three faces, three
+   overlays. Perspective sits on each bar rather than the track: one shared
+   vanishing point across a 1400px board would skew the right-hand bars into
+   nonsense. Apothem for a 3-gon of side 25px is 25/(2*tan60) = 7.22px. */
+.trip{position:absolute;top:4px;height:calc(var(--rowh) - 9px);cursor:grab;
+  perspective:280px;white-space:nowrap;font:500 10px/1 var(--sans);
+  --bar:var(--st-dispatched); --barink:#05090d;
+  transition:left .5s cubic-bezier(.4,0,.2,1),width .5s cubic-bezier(.4,0,.2,1),opacity .2s}
+.prism{position:absolute;inset:0;transform-style:preserve-3d;
+  transform:rotateX(var(--rot,0deg));
+  /* duration is set from JS (HARMONY.timing.rotateMs); the curve stays here.
+     Strong ease-in-out on purpose: the middle of a turn is unreadable at any
+     speed, so cross it fast and decelerate into the face. */
+  transition:transform 850ms cubic-bezier(.65,0,.3,1)}
+.face{position:absolute;inset:0;border-radius:3px;border:1px solid rgba(0,0,0,.28);
+  background:var(--fbg,var(--bar));color:var(--fink,var(--barink));
+  display:flex;align-items:center;gap:4px;padding:0 5px;overflow:hidden;
+  backface-visibility:hidden;
+  transform:rotateX(calc(var(--i) * -120deg)) translateZ(7.22px)}
+/* a bar too narrow to carry a face does not turn at all */
+.trip.flat .prism{transform:none;transition:none}
+.trip.flat .face{transform:none;backface-visibility:visible}
+.trip:hover{z-index:6}
+.trip:hover .face{filter:brightness(1.15)}
+
+.trip .ref{font:600 9.5px/1 var(--mono);opacity:.62;flex:0 0 auto}
+.trip .svc{font-size:9px;opacity:.55;flex:0 0 auto}
+.trip .nm{overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.trip .nm.swap{animation:swapin .3s ease-out}
+@keyframes swapin{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+
+/* status paints the whole solid, not one face */
+.trip.st-dispatched{--bar:var(--st-dispatched);--barink:#e8eef5}
+.trip.st-enroute{--bar:var(--st-enroute)}
+.trip.st-onlocation{--bar:var(--st-onlocation)}
+.trip.st-onboard{--bar:var(--st-onboard)}
+.trip.st-complete{--bar:var(--st-complete);--barink:#7e8f9e}
+.trip.st-missed{--bar:var(--st-missed);--barink:#fff}
+.trip.st-unassigned{--bar:var(--st-unassigned);--barink:#f2dde2}
+.trip.st-affiliate{--bar:var(--st-affiliate);--barink:#efe9f7}
+.trip.broken{--bar:var(--red);--barink:#fff}
+.trip.broken .face{background:var(--red);color:#fff;
+  box-shadow:0 0 0 1px var(--red),0 0 12px rgba(255,95,109,.35)}
+.trip.vip .face{box-shadow:inset 0 0 0 1.5px var(--gold)}
+.trip.late .face{box-shadow:inset 0 0 0 1.5px var(--amber)}
+.trip.vip .face::after{content:"c6";font-size:8px;color:#4a3a0a;margin-left:auto}
+.trip.locked .face::before{content:"7";font-size:9px;opacity:.7;margin-right:1px}
+.trip.committed{cursor:default}
+.trip.dim{opacity:.16}
+.trip.moving{outline:2px solid var(--violet);outline-offset:1px}
+.trip.injected{animation:pop .55s ease-out}
+@keyframes pop{0%{transform:scale(.75);opacity:0}100%{transform:scale(1);opacity:1}}
+
+/* a rotated element photographs badly as a drag image; this flat stand-in
+   is handed to setDragImage instead */
+.dragghost{position:fixed;left:-9999px;top:0;border-radius:3px;padding:0 5px;
+  display:flex;align-items:center;gap:4px;font:600 10px/1 var(--sans);
+  border:1px solid rgba(0,0,0,.28);overflow:hidden;white-space:nowrap}
+
+.ghost{position:absolute;top:4px;height:calc(var(--rowh) - 9px);border-radius:3px;
+  border:1px dashed var(--violet);background:rgba(155,140,255,.13);
+  font:600 9.5px/1 var(--mono);color:var(--violet);display:flex;align-items:center;
+  padding:0 5px;overflow:hidden;pointer-events:none;z-index:5;animation:fade .35s ease-out}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+
+.nowline{position:absolute;top:0;bottom:0;width:1px;background:var(--teal);z-index:8;
+  pointer-events:none;box-shadow:0 0 9px rgba(47,220,196,.55)}
+.nowline b{position:absolute;top:0;left:3px;font:600 9px/1 var(--mono);color:var(--teal);
+  background:var(--bg);padding:2px 3px;letter-spacing:.06em}
+
+.unrow{border-top:1px solid var(--line2);background:#150f14;min-height:var(--rowh);
+  display:flex;position:relative}
+.unrow .vlabel{background:#150f14;flex:0 0 150px}
+.unrow .vlabel b{color:var(--red)}
+.unrow .track{padding:4px 0}
+.unrow .trip{position:relative;display:inline-flex;top:0;margin:0 4px 4px 0;height:22px}
+.unrow .track{display:flex;flex-wrap:wrap;align-items:flex-start;overflow-x:auto}
+
+/* ---------- intelligence panel ---------- */
+.intel{background:var(--panel);display:flex;flex-direction:column;min-height:0}
+.intelhead{display:flex;justify-content:space-between;align-items:flex-start;
+  padding:12px 14px 10px;border-bottom:1px solid var(--line)}
+.intelhead h2{font-size:14px}
+.log{flex:1 1 auto;overflow-y:auto;padding:10px 14px;font-family:var(--mono);font-size:11px;min-height:120px}
+.li{display:flex;gap:9px;padding:5px 0;border-bottom:1px solid rgba(30,42,56,.4);animation:slide .25s ease-out}
+@keyframes slide{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.li time{flex:0 0 58px;color:var(--ink3);font-size:10px;padding-top:1px}
+.li .body{min-width:0;flex:1 1 auto}
+.li b{display:block;font-weight:600;font-size:11px;color:var(--ink)}
+.li p{margin:2px 0 0;color:var(--ink2);font-size:10.5px;line-height:1.45;
+  font-family:var(--sans);white-space:pre-wrap}
+.li.sys b{color:var(--teal)} .li.warn b{color:var(--amber)} .li.bad b{color:var(--red)}
+.li.ok b{color:var(--teal)}
+.li .num{color:var(--teal);font-family:var(--mono)}
+.li.run b::after{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;
+  background:var(--teal);margin-left:6px;animation:blink .8s steps(2) infinite;vertical-align:middle}
+@keyframes blink{50%{opacity:.15}}
+
+.proposal{border-top:1px solid var(--violet);background:linear-gradient(180deg,rgba(155,140,255,.09),transparent 70%);
+  padding:11px 14px;max-height:44vh;overflow-y:auto;flex:0 0 auto}
+.prophead{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}
+.proplabel{font:600 9px/1 var(--mono);letter-spacing:.14em;color:var(--violet)}
+.prophead span:last-child{font:500 10px/1 var(--mono);color:var(--ink3)}
+.propgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:5px;overflow:hidden;margin-bottom:9px}
+.propgrid div{background:var(--panel2);padding:7px 9px}
+.propgrid span{display:block;font:600 9px/1 var(--mono);letter-spacing:.08em;color:var(--ink3);margin-bottom:4px}
+.propgrid b{font:600 13px/1 var(--mono)}
+.propgrid b.up{color:var(--teal)} .propgrid b.down{color:var(--red)} .propgrid b.flat{color:var(--ink2)}
+.propmoves{font-family:var(--mono);font-size:10.5px;max-height:170px;overflow-y:auto;margin-bottom:10px}
+.mv{display:flex;gap:7px;padding:5px 0;border-bottom:1px solid rgba(30,42,56,.5);cursor:pointer}
+.mv:hover{background:rgba(155,140,255,.06)}
+.mv .ar{color:var(--violet);flex:0 0 auto}
+.mv .txt{min-width:0}
+.mv .txt b{display:block;color:var(--ink);font-weight:600}
+.mv .txt small{display:block;color:var(--ink3);font-family:var(--sans);font-size:10px;line-height:1.4;margin-top:1px}
+.propact{display:flex;gap:7px}
+
+.intelfoot{border-top:1px solid var(--line);padding:10px 14px;display:flex;gap:7px;flex:0 0 auto}
+.primary{background:var(--teal);color:#05201c;font:600 11px/1 var(--mono);letter-spacing:.09em;
+  padding:10px 14px;border-radius:5px;transition:filter .15s}
+.primary:hover{filter:brightness(1.12)} .primary:disabled{opacity:.4;cursor:default}
+.ghostbtn{border:1px solid var(--line2);color:var(--ink2);font:600 10px/1 var(--mono);
+  letter-spacing:.09em;padding:10px 12px;border-radius:5px;transition:border-color .15s,color .15s}
+.ghostbtn:hover{border-color:var(--teal);color:var(--teal)}
+.ghostbtn:disabled{opacity:.35;cursor:default;border-color:var(--line)}
+.wide{flex:1 1 auto}
+
+/* ---------- bench ---------- */
+.bench{display:grid;grid-template-columns:minmax(0,1fr) 372px;gap:1px;background:var(--line);
+  border-top:1px solid var(--line)}
+.benchcol{background:var(--bg2);padding:12px 16px}
+.benchcol.narrow{background:var(--panel)}
+.events{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:7px}
+.events button{border:1px solid var(--line);background:var(--panel);border-radius:6px;
+  padding:9px 11px;text-align:left;transition:border-color .15s,background .15s}
+.events button:hover{border-color:var(--teal);background:#132029}
+.events button b{display:block;font:600 11.5px/1.3 var(--sans)}
+.events button small{display:block;font:500 10px/1.3 var(--mono);color:var(--ink3);margin-top:2px}
+.events button.danger:hover{border-color:var(--red);background:#20141a}
+.events button.danger b{color:var(--red)}
+
+.strategy{display:flex;gap:5px;margin-bottom:8px}
+.strategy button{flex:1;border:1px solid var(--line);background:var(--panel2);border-radius:5px;
+  padding:8px 5px;font:600 10px/1.2 var(--mono);color:var(--ink3);letter-spacing:.03em}
+.strategy button.on{border-color:var(--teal);color:var(--teal);background:#132824}
+.hint{margin:0 0 9px;font:500 10.5px/1.5 var(--sans);color:var(--ink3)}
+.autorow{margin-bottom:9px}
+
+/* ---------- toast ---------- */
+.toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);opacity:0;
+  background:#0b1117;border:1px solid var(--line2);border-left:3px solid var(--teal);
+  padding:11px 16px;border-radius:6px;z-index:90;pointer-events:none;max-width:520px;
+  box-shadow:0 12px 40px rgba(0,0,0,.6);transition:opacity .2s,transform .2s}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.toast b{display:block;font-size:12px;margin-bottom:2px}
+.toast p{margin:0;color:var(--ink2);font-size:11px;line-height:1.45}
+.toast.bad{border-left-color:var(--red)} .toast.bad b{color:var(--red)}
+.toast.warn{border-left-color:var(--amber)} .toast.warn b{color:var(--amber)}
+
+/* ---------- sheet ---------- */
+.sheet{position:fixed;inset:0;background:rgba(4,7,10,.72);z-index:100;display:flex;
+  align-items:center;justify-content:center;padding:26px;backdrop-filter:blur(3px)}
+.sheetinner{background:var(--panel);border:1px solid var(--line2);border-radius:9px;
+  max-width:760px;width:100%;max-height:84vh;overflow-y:auto;padding:22px 24px;position:relative;
+  box-shadow:0 24px 70px rgba(0,0,0,.65)}
+.sheetclose{position:absolute;top:12px;right:14px;font-size:22px;color:var(--ink3);line-height:1}
+.sheetclose:hover{color:var(--ink)}
+.sheetinner h3{font-size:17px;margin-bottom:3px}
+.sheetinner h4{font:600 10px/1 var(--mono);letter-spacing:.13em;color:var(--ink3);
+  margin:20px 0 9px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.sheetinner p{color:var(--ink2);font-size:12px;line-height:1.55}
+.facts{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+  background:var(--line);border:1px solid var(--line);border-radius:5px;overflow:hidden;margin:12px 0}
+.facts div{background:var(--panel2);padding:8px 10px}
+.facts.c3{grid-template-columns:repeat(3,1fr)}
+.facts.c2{grid-template-columns:repeat(2,1fr)}
+.facts span{display:block;font:600 9px/1 var(--mono);letter-spacing:.08em;color:var(--ink3);margin-bottom:4px}
+.facts b{font:600 12.5px/1.2 var(--mono)}
+.rows2{font-family:var(--mono);font-size:11px}
+.rw{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid rgba(30,42,56,.5);align-items:baseline}
+.rw .tick{flex:0 0 14px}
+.rw.pass .tick{color:var(--teal)} .rw.fail .tick{color:var(--red)}
+.rw .l{flex:1 1 auto;color:var(--ink)}
+.rw .r{color:var(--ink3);flex:0 0 auto}
+.rw.fail .r{color:var(--red)}
+.cand{display:flex;gap:9px;padding:6px 0;border-bottom:1px solid rgba(30,42,56,.5);font-family:var(--mono);font-size:11px}
+.cand .v{flex:0 0 62px;font-weight:600}
+.cand.no .v{color:var(--red)} .cand.yes .v{color:var(--teal)}
+.cand .d{color:var(--ink2);font-family:var(--sans);font-size:11px;line-height:1.45}
+.sheetacts{display:flex;gap:8px;margin-top:20px;flex-wrap:wrap}
+.banner{border-radius:6px;padding:11px 14px;margin:14px 0;font-size:12px;line-height:1.5}
+.banner.ok{background:rgba(47,220,196,.08);border:1px solid var(--teal-d);color:var(--teal)}
+.banner.bad{background:rgba(255,95,109,.08);border:1px solid var(--red-d);color:var(--red)}
+.banner.warn{background:rgba(247,185,85,.08);border:1px solid var(--amber-d);color:var(--amber)}
+
+@media(max-width:1280px){
+  .stage,.bench{grid-template-columns:1fr}
+  .intel{max-height:none}
+  .kpis{grid-template-columns:repeat(4,1fr)}
+}
+
+.sheet[hidden]{display:none!important}
+
+/* ---------- accessibility ---------- */
+/* Every animation here is decorative or a status hint that is also carried by
+   colour and text, so none of it is load-bearing and all of it can go. */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.001ms!important; animation-iteration-count:1!important;
+    transition-duration:.001ms!important; scroll-behavior:auto!important;
+  }
+}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:3px}
+.trip:focus-visible,.days button:focus-visible{outline-offset:1px}
+
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <span class="mark"><i></i><i></i><i></i></span>
+    <span class="wordmark">harmony</span>
+    <span class="tag">DISPATCH SIMULATOR</span>
+  </div>
+
+  <nav class="days" id="days" aria-label="Scenario day"></nav>
+
+  <div class="topright">
+    <div class="clockbox">
+      <span class="clockval" id="clock">05:00</span>
+      <div class="speeds" id="speeds">
+        <button data-sp="0" class="on">‖</button>
+        <button data-sp="1">1×</button>
+        <button data-sp="10">10×</button>
+        <button data-sp="60">60×</button>
+      </div>
+    </div>
+    <div class="statepill" id="statepill"><i></i><span>PLAN STABLE</span></div>
+  </div>
+</header>
+
+<section class="brief" id="brief"></section>
+
+<section class="kpis" id="kpis"></section>
+
+<main class="stage">
+
+  <section class="board">
+    <div class="boardhead">
+      <div>
+        <h2>Dispatch timeline</h2>
+        <p id="boardsub">—</p>
+      </div>
+      <div class="boardtools">
+        <div class="bubbles" id="bubbles" role="group" aria-label="Trip label overlay"></div>
+        <button class="gear" id="setupBtn" title="Board setup — faces, colours, rotation speed" aria-label="Board setup">&#9881;</button>
+        <span class="angleread" id="angleRead" title="Scroll the wheel over any trip to turn the board">Passenger</span>
+        <div class="keyrow">
+          <div class="key" id="statusKey"></div>
+          <label class="filter"><input type="checkbox" id="fProblems"> Problems only</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="setup" id="setup" hidden></div>
+
+    <div class="axis" id="axis"></div>
+    <div class="gridwrap" id="gridwrap">
+      <div class="nowline" id="nowline"><b id="nowlabel">05:00</b></div>
+      <div class="rows" id="rows"></div>
+      <div class="unrow" id="unrow"></div>
+    </div>
+  </section>
+
+  <aside class="intel">
+    <div class="intelhead">
+      <div>
+        <p class="eyebrow">HARMONY INTELLIGENCE</p>
+        <h2 id="intelTitle">Monitoring</h2>
+      </div>
+      <button class="ghostbtn" id="auditBtn" title="Run an independent check of the current plan">AUDIT</button>
+    </div>
+
+    <div class="log" id="log"></div>
+
+    <div class="proposal hidden" id="proposal">
+      <div class="prophead">
+        <span class="proplabel">PROPOSAL</span>
+        <span id="propCount">—</span>
+      </div>
+      <div class="propgrid" id="propGrid"></div>
+      <div class="propmoves" id="propMoves"></div>
+      <div class="propact">
+        <button class="primary" id="applyBtn">Apply</button>
+        <button class="ghostbtn" id="discardBtn">Discard</button>
+      </div>
+    </div>
+
+    <div class="intelfoot">
+      <button class="primary wide" id="optBtn">◈ REOPTIMIZE</button>
+      <button class="ghostbtn" id="undoBtn" disabled>↶ Undo</button>
+    </div>
+  </aside>
+</main>
+
+<section class="bench">
+  <div class="benchcol">
+    <p class="eyebrow">INJECT A DISRUPTION</p>
+    <div class="events">
+      <button data-ev="flight"><b>Flight delay</b><small>+45 min on an inbound</small></button>
+      <button data-ev="breakdown"><b>Vehicle breakdown</b><small>Take a busy car offline</small></button>
+      <button data-ev="callout"><b>Chauffeur callout</b><small>Pull a crewed chauffeur</small></button>
+      <button data-ev="traffic"><b>Traffic disruption</b><small>+25% drive times</small></button>
+      <button data-ev="reservation"><b>Last-minute booking</b><small>Unassigned, inside 2 hrs</small></button>
+      <button data-ev="surge"><b>Airport surge</b><small>6 arrivals in 50 min</small></button>
+      <button class="danger" data-ev="chaos"><b>Complete chaos</b><small>All of it, at once</small></button>
+    </div>
+  </div>
+
+  <div class="benchcol narrow">
+    <p class="eyebrow">OPTIMIZATION STRATEGY</p>
+    <div class="strategy" id="strategy"></div>
+    <p class="hint" id="wHint">—</p>
+    <div class="autorow">
+      <label class="filter"><input type="checkbox" id="autoOpt"> Reoptimize automatically on every change</label>
+    </div>
+    <button class="ghostbtn wide" id="resetBtn">↻ Restore this day</button>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheetinner">
+    <button class="sheetclose" id="sheetClose">×</button>
+    <div id="sheetBody"></div>
+  </div>
+</div>
+
+<script>
+/* ---- core.js ---- */
+/* Harmony - core world model.
+   Deterministic synthetic operation: geography, travel time, fleet, crew, demand.
+   Everything downstream reads from here. Nothing in this file is display text. */
+(function (G) {
+'use strict';
+
+/* ---------- deterministic RNG (mulberry32) ---------- */
+function rng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const pick = (r, a) => a[Math.floor(r() * a.length)];
+const gint = (r, a, b) => a + Math.floor(r() * (b - a + 1));
+
+/* ---------- geography: Philadelphia region, miles on a local plane ---------- */
+const LOC = {
+  PHL:  { name: 'PHL Airport',       x:  -4.0, y:  -6.0, air: true },
+  CC:   { name: 'Center City',       x:   0.0, y:   0.0 },
+  UCTY: { name: 'University City',   x:  -2.0, y:   0.5 },
+  RITT: { name: 'Rittenhouse',       x:  -0.8, y:   0.4 },
+  NAVY: { name: 'Navy Yard',         x:  -1.0, y:  -4.0 },
+  BALA: { name: 'Bala Cynwyd',       x:  -5.0, y:   4.0 },
+  MANA: { name: 'Manayunk',          x:  -6.0, y:   6.0 },
+  CHIL: { name: 'Chestnut Hill',     x:  -4.0, y:   9.0 },
+  ARDM: { name: 'Ardmore',           x:  -9.0, y:   5.0 },
+  BRYN: { name: 'Bryn Mawr',         x: -11.0, y:   6.0 },
+  VILL: { name: 'Villanova',         x: -13.0, y:   6.0 },
+  WAYN: { name: 'Wayne',             x: -15.0, y:   7.0 },
+  KOP:  { name: 'King of Prussia',   x: -17.0, y:  10.0 },
+  CONS: { name: 'Conshohocken',      x:  -9.0, y:   9.0 },
+  PLYM: { name: 'Plymouth Meeting',  x: -10.0, y:  12.0 },
+  FTWA: { name: 'Fort Washington',   x:  -6.0, y:  14.0 },
+  MALV: { name: 'Malvern',           x: -21.0, y:   8.0 },
+  EXTN: { name: 'Exton',             x: -25.0, y:   8.0 },
+  WCHE: { name: 'West Chester',      x: -22.0, y:   1.0 },
+  NEWT: { name: 'Newtown Square',    x: -14.0, y:   2.0 },
+  MEDA: { name: 'Media',             x: -12.0, y:  -5.0 },
+  WILM: { name: 'Wilmington',        x: -27.0, y: -12.0 },
+  CHER: { name: 'Cherry Hill',       x:   7.0, y:  -1.0 },
+  DOYL: { name: 'Doylestown',        x:   2.0, y:  26.0 },
+  PRIN: { name: 'Princeton',         x:  32.0, y:  20.0 },
+  GARA: { name: 'Conshohocken Yard', x:  -8.6, y:   8.6, depot: true },
+  GARS: { name: 'Essington Yard',    x:  -5.4, y:  -6.8, depot: true }
+};
+const ROAD_FACTOR = 1.28;
+
+function miles(a, b) {
+  if (a === b) return 0;
+  const A = LOC[a], B = LOC[b];
+  return Math.hypot(A.x - B.x, A.y - B.y) * ROAD_FACTOR;
+}
+/* longer hops use highways, so average speed rises with distance */
+function mph(d) { return 24 + Math.min(d, 35) * 0.62; }
+
+/* time-of-day congestion multiplier applied to travel TIME */
+function congestion(min) {
+  const h = (min % 1440) / 60;
+  if (h >= 6 && h <= 10)    return 1 + 0.42 * Math.exp(-Math.pow((h - 8.0) / 1.15, 2));
+  if (h >= 15 && h <= 19.5) return 1 + 0.50 * Math.exp(-Math.pow((h - 17.2) / 1.25, 2));
+  if (h < 5 || h > 22)      return 0.86;
+  return 1;
+}
+
+/* the single travel-time oracle. Every projected minute in the product comes through here. */
+function travelMin(a, b, atMin, traffic) {
+  if (a === b) return 0;
+  const d = miles(a, b);
+  return (d / mph(d)) * 60 * congestion(atMin) * (traffic || 1) + 3;
+}
+
+/* ---------- time helpers (minutes from midnight) ---------- */
+function hhmm(m) {
+  m = Math.round(m) % 1440; if (m < 0) m += 1440;
+  let h = Math.floor(m / 60); const mi = m % 60; const ap = h >= 12 ? 'PM' : 'AM';
+  h = h % 12; if (h === 0) h = 12;
+  return h + ':' + String(mi).padStart(2, '0') + ' ' + ap;
+}
+function hhmm24(m) {
+  m = Math.round(m) % 1440; if (m < 0) m += 1440;
+  return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+}
+
+/* ---------- fleet & crew ---------- */
+const CLASS_LABEL = { sedan: 'Sedan', suv: 'SUV', van: 'Van' };
+const CAP = { sedan: 3, suv: 6, van: 13 };
+
+/* Substitution lattice, written out rather than inferred from an ordering:
+   an SUV may cover a sedan request; nothing covers an SUV or a van but itself. */
+const SUBSTITUTES = { sedan: ['sedan', 'suv'], suv: ['suv'], van: ['van'] };
+function canCover(vehCls, reqCls) { return SUBSTITUTES[reqCls].indexOf(vehCls) !== -1; }
+
+const TIER = { 1: 'Associate', 2: 'Professional', 3: 'Principal' };
+const VIP_MIN_TIER = 2;
+
+const MODELS = {
+  sedan: ['Cadillac CT6', 'Mercedes E 350', 'Lincoln Continental', 'BMW 740i'],
+  suv:   ['Cadillac Escalade', 'Chevrolet Suburban', 'Lincoln Navigator'],
+  van:   ['Mercedes Sprinter', 'Ford Transit Executive']
+};
+const NAMES = ['Marcus Bell','Dana Whitfield','Priya Raman','Tomas Herrera','Grace Okafor',
+  'Elliot Shaw','Nadia Kaur','Victor Ruiz','Imani Brooks','Sean Delaney','Yuki Tanaka',
+  'Andre Ferreira','Rachel Stern','Omar Haddad','Lena Kovac','Curtis Boyd','Sofia Marchetti',
+  'Devon Pike','Hana Salim','Bruno Castellan','Ivy Lockhart','Rafael Ortiz','Mei-Lin Chow',
+  'Gordon Ashby','Talia Berman','Kwame Mensah','Erin Doyle','Pavel Novak','Simone Duval',
+  'Hector Vela','Nora Kelleher','Julius Vance','Anika Dutta','Roman Petrov','Clara Bendix'];
+
+function buildFleet() {
+  const r = rng(0xC0FFEE);
+  const vehicles = [];
+  /* Mix follows the substitution lattice: the SUV is the flexible asset (it can
+     cover sedan work, nothing can cover it), so a real operator over-indexes on
+     SUVs rather than buying sedans it cannot redeploy. */
+  const spec = [['sedan', 10], ['suv', 16], ['van', 4]];
+  let n = 101;
+  spec.forEach(function (s) {
+    for (let i = 0; i < s[1]; i++) {
+      const cls = s[0];
+      vehicles.push({
+        id: 'V' + n,
+        label: (cls === 'sedan' ? 'S-' : cls === 'suv' ? 'X-' : 'W-') + n,
+        cls: cls, cap: CAP[cls], model: pick(r, MODELS[cls]),
+        base: r() < 0.62 ? 'GARA' : 'GARS',
+        oos: null
+      });
+      n += r() < 0.5 ? 3 : 4;
+    }
+  });
+  const chauffeurs = NAMES.map(function (nm, i) {
+    /* 16 / 13 / 6. Deliberately NOT enough Professionals and Principals to cover
+       all 20 SUVs and vans: if the roster could staff every VIP-capable car with
+       a senior chauffeur, the VIP tier rule would be satisfied by construction
+       and could never bind. It has to be possible to get this wrong. */
+    const tier = i < 16 ? 1 : i < 29 ? 2 : 3;
+    /* Demand peaks 06:00-09:00, so the roster is weighted to the morning.
+       The late shift exists to carry the evening airport bank. */
+    const early = (i % 5) < 3;
+    return {
+      id: 'C' + (201 + i), name: nm, tier: tier,
+      shiftStart: early ? gint(r, 285, 345)  : gint(r, 510, 585),
+      shiftEnd:   early ? gint(r, 1020, 1110): gint(r, 1320, 1440),
+      available: true
+    };
+  });
+  return { vehicles: vehicles, chauffeurs: chauffeurs };
+}
+
+/* ---------- demand ---------- */
+const ACCOUNTS = ['Northbank Capital','Tidewater Executive','Larkspur Health','Lockhart & Pryce',
+  'Fenwick Bio','Orion Board','Nexa Group','Millrace Partners','Hollins Advisors',
+  'Ashgrove Exec Ed','Quillon Re','Bellweather Media','Copperline Chemical','Delancey Trust',
+  'Chatham Equity','Bridgemont Pharma','Aldridge Family Office','Grand Hotel Concierge'];
+const PAX = ['Harper','Mitchell','Adams','Nguyen','Klein','Carter','Foster','Wilson','Morgan',
+  'Davis','Singh','Garcia','Allen','Hayes','Brooks','Whitman','Okonkwo','Reyes','Lindqvist',
+  'Chen','Abbott','Baptiste','Sorensen','Ferrante','Nakamura','Odell','Pryor','Vance'];
+const SUBURBS = ['ARDM','BRYN','VILL','WAYN','KOP','MALV','EXTN','WCHE','NEWT','MEDA','CONS',
+  'PLYM','FTWA','CHIL','BALA','MANA','CHER','DOYL','WILM','PRIN'];
+const CITY = ['CC','RITT','UCTY','NAVY'];
+const AIRLINES = ['AA', 'UA', 'DL', 'AS', 'B6'];
+
+/* relative demand weight by hour of day */
+const PROFILE = [0,0,0,0,0.2,1.4,3.2,4.4,3.6,2.4,2.0,2.2,2.4,2.2,2.4,3.0,4.2,4.6,3.6,2.6,1.8,1.2,0.6,0.2];
+const PROFILE_TOTAL = PROFILE.reduce((a, b) => a + b, 0);
+function sampleHour(r) {
+  let x = r() * PROFILE_TOTAL;
+  for (let h = 0; h < 24; h++) { x -= PROFILE[h]; if (x <= 0) return h; }
+  return 17;
+}
+
+function makeTrip(r, refNo, cfg) {
+  const h = sampleHour(r);
+  const pickupMin = h * 60 + gint(r, 0, 59);
+  const isAirport = r() < cfg.airportRate;
+  const vip = r() < cfg.vipRate;
+  let svc, from, to, hourlyMin = 0, flight = null, waitMin = 0;
+
+  if (isAirport) {
+    if (r() < 0.55) {
+      svc = 'arrival'; from = 'PHL'; to = pick(r, r() < 0.45 ? CITY : SUBURBS);
+      flight = { code: pick(r, AIRLINES) + ' ' + gint(r, 100, 2899), sched: pickupMin - 35, delayMin: 0 };
+    } else {
+      svc = 'departure'; from = pick(r, r() < 0.45 ? CITY : SUBURBS); to = 'PHL';
+      flight = { code: pick(r, AIRLINES) + ' ' + gint(r, 100, 2899), sched: pickupMin + 150, delayMin: 0 };
+    }
+  } else if (r() < 0.62) {
+    svc = 'waitreturn'; from = pick(r, r() < 0.5 ? CITY : SUBURBS);
+    to = pick(r, SUBURBS.concat(CITY).filter(x => x !== from));
+    waitMin = pick(r, [45, 60, 90, 120]);
+  } else {
+    svc = 'hourly'; from = pick(r, r() < 0.6 ? CITY : SUBURBS); to = from;
+    hourlyMin = pick(r, [120, 180, 180, 240]);
+  }
+
+  const pax = svc === 'hourly' ? gint(r, 1, 4) : (r() < 0.10 ? gint(r, 5, 11) : gint(r, 1, 3));
+  /* Plenty of VIPs ride a sedan - an executive alone does not need an Escalade.
+     That matters: it is what puts VIP work on cars an Associate might be driving. */
+  let reqCls = pax > 6 ? 'van' : pax > 3 ? 'suv' : (vip && r() < 0.45 ? 'suv' : (r() < 0.3 ? 'suv' : 'sedan'));
+  if (pax > CAP[reqCls]) reqCls = 'van';
+
+  return {
+    id: 'T' + refNo, ref: String(refNo),
+    account: r() < 0.55 ? pick(r, ACCOUNTS) : null,
+    pax: pax, paxName: pick(r, PAX),
+    svc: svc, from: from, to: to,
+    pickup: pickupMin, basePickup: pickupMin,
+    reqCls: reqCls, vip: vip, flight: flight,
+    waitMin: waitMin, hourlyMin: hourlyMin,
+    locked: false,
+    notified: r() < 0.38,      /* chauffeur already named to the customer */
+    prefChauffeur: null,
+    injected: false, affiliate: false
+  };
+}
+
+function makeDay(cfg) {
+  const r = rng(cfg.seed);
+  const trips = [];
+  for (let i = 0; i < cfg.count; i++) trips.push(makeTrip(r, cfg.refBase + i, cfg));
+  trips.sort((a, b) => a.pickup - b.pickup);
+  return {
+    id: cfg.id, name: cfg.name, sub: cfg.sub, date: cfg.date,
+    traffic: cfg.traffic, baseTraffic: cfg.traffic, trips: trips,
+    brief: cfg.brief, seed: cfg.seed, nextRef: cfg.refBase + cfg.count
+  };
+}
+
+/* service duration, given the actual start time and current traffic */
+function serviceMin(trip, startMin, traffic) {
+  if (trip.svc === 'hourly') return trip.hourlyMin;
+  if (trip.svc === 'waitreturn') {
+    const out = travelMin(trip.from, trip.to, startMin, traffic);
+    const back = travelMin(trip.to, trip.from, startMin + out + trip.waitMin, traffic);
+    return out + trip.waitMin + back + 10;
+  }
+  return travelMin(trip.from, trip.to, startMin, traffic) + (trip.svc === 'arrival' ? 14 : 16);
+}
+/* where the vehicle physically ends up when the trip completes */
+function endLoc(trip) { return (trip.svc === 'hourly' || trip.svc === 'waitreturn') ? trip.from : trip.to; }
+
+G.HX = G.HX || {};
+Object.assign(G.HX, {
+  rng, pick, gint, LOC, miles, travelMin, congestion, hhmm, hhmm24,
+  CLASS_LABEL, CAP, SUBSTITUTES, canCover, TIER, VIP_MIN_TIER,
+  buildFleet, makeDay, makeTrip, serviceMin, endLoc,
+  AIRLINES, SUBURBS, CITY, ACCOUNTS, PAX
+});
+})(window);
+
+</script>
+<script>
+/* ---- model.js ---- */
+/* Harmony - schedule projection, hard constraints, objective function.
+   This module is the ONLY place that decides whether an assignment is legal
+   and what a plan costs. The optimizer, the UI and the independent auditor all
+   call in here, so there is no second opinion to drift out of sync. */
+(function (G) {
+'use strict';
+const H = G.HX;
+
+/* ---------- constraint codes ---------- */
+const CODE = {
+  CLASS:      'VEHICLE_CLASS',
+  CAPACITY:   'CAPACITY',
+  TIER:       'CHAUFFEUR_TIER',
+  NO_CREW:    'NO_CHAUFFEUR',
+  OOS:        'VEHICLE_OUT_OF_SERVICE',
+  SHIFT:      'SHIFT_WINDOW',
+  CREW_DUP:   'CHAUFFEUR_DOUBLE_BOOKED',
+  UNASSIGNED: 'UNASSIGNED',
+  LOCKED:     'LOCK_BROKEN',
+  HISTORY:    'HISTORY_CONFLICT'
+};
+const CODE_TEXT = {
+  VEHICLE_CLASS:            'vehicle class cannot cover the requested class',
+  CAPACITY:                 'passenger count exceeds vehicle capacity',
+  CHAUFFEUR_TIER:           'VIP trip requires a Professional or Principal chauffeur',
+  NO_CHAUFFEUR:             'vehicle has no chauffeur assigned',
+  VEHICLE_OUT_OF_SERVICE:   'vehicle is out of service during the trip window',
+  SHIFT_WINDOW:             'trip falls more than 120 min outside the chauffeur shift',
+  CHAUFFEUR_DOUBLE_BOOKED:  'chauffeur is crewed to more than one vehicle',
+  UNASSIGNED:               'reservation has no vehicle',
+  LOCK_BROKEN:              'locked assignment was moved',
+  HISTORY_CONFLICT:         'the car cannot reach a trip it has already begun'
+};
+
+/* how far past shift end we will still let a chauffeur run before it is illegal */
+const OVERTIME_HARD_CAP = 120;
+/* lateness beyond this is treated as a service failure in the KPIs */
+const LATE_THRESHOLD = 5;
+const SERVICE_FAIL   = 20;
+/* affiliate farm-out */
+const AFFILIATE_FEE  = 145;
+
+/* ================= trip lifecycle =================
+   Status is derived from the clock against the PROJECTED leg, not the booked
+   pickup. A car running 20 minutes behind is still "on location" when its
+   booked pickup time passes - which is exactly what being late looks like. */
+const STATUS = ['dispatched', 'enroute', 'onlocation', 'onboard', 'complete'];
+const STATUS_LABEL = {
+  dispatched: 'Dispatched', enroute: 'Enroute', onlocation: 'On location',
+  onboard: 'Client onboard', complete: 'Complete',
+  missed: 'Missed', unassigned: 'Unassigned', affiliate: 'Affiliate'
+};
+const ENROUTE_LEAD = 60;     /* driver sets off an hour before */
+const ONLOCATION_LEAD = 15;  /* on the curb a quarter hour before */
+
+function statusOf(state, trip, leg) {
+  const a = state.plan.assign[trip.id];
+  if (a === 'AFFILIATE') return 'affiliate';
+  if (!a || !leg) return state.clock > trip.pickup ? 'missed' : 'unassigned';
+  const c = state.clock;
+  if (c >= leg.end) return 'complete';
+  if (c >= leg.start) return 'onboard';
+  if (c >= leg.start - ONLOCATION_LEAD) return 'onlocation';
+  if (c >= leg.start - ENROUTE_LEAD) return 'enroute';
+  return 'dispatched';
+}
+
+/* A trip the car has already begun cannot be reassigned by anyone - the
+   client is in the vehicle. This is the rule that makes the clock mean
+   something to the optimizer. */
+function committed(state, trip) { return trip.startedAt != null; }
+/* Currently carrying: started and not yet finished. Distinct from committed() -
+   a car whose morning job is long since complete is not mid-run. */
+function midRun(state, trip) { return trip.startedAt != null && !trip.actual; }
+
+/* ---------- weight presets ---------- */
+const PRESETS = {
+  service:    { name: 'Service First',   late: 4.0, deadhead: 0.8, overtime: 0.6, disruption: 0.8, affiliate: 0.5, unassigned: 400, pref: 6 },
+  balanced:   { name: 'Balanced',        late: 2.2, deadhead: 1.6, overtime: 1.1, disruption: 1.4, affiliate: 1.0, unassigned: 400, pref: 4 },
+  efficiency: { name: 'Efficiency First',late: 1.0, deadhead: 3.2, overtime: 2.4, disruption: 2.6, affiliate: 2.2, unassigned: 400, pref: 2 }
+};
+
+/* ---------- plan shape ----------
+   plan = { assign: { tripId -> vehicleId | null | 'AFFILIATE' },
+            crew:   { vehicleId -> chauffeurId | null } }
+   A chauffeur is crewed to a vehicle for the day, which is how livery
+   operations actually run; the optimizer may re-pair crew to vehicles. */
+
+function emptyPlan() { return { assign: {}, crew: {} }; }
+function clonePlan(p) { return { assign: Object.assign({}, p.assign), crew: Object.assign({}, p.crew) }; }
+
+/* ---------- state ----------
+   state = { fleet:{vehicles,chauffeurs}, day, plan, weights, byId:{...} } */
+function index(state) {
+  state.vById = {}; state.fleet.vehicles.forEach(v => state.vById[v.id] = v);
+  state.cById = {}; state.fleet.chauffeurs.forEach(c => state.cById[c.id] = c);
+  state.tById = {}; state.day.trips.forEach(t => state.tById[t.id] = t);
+  return state;
+}
+
+/* ================= projection =================
+   Walks one vehicle's day forward in time. Nothing here is estimated twice:
+   the start of each trip is whatever the previous trip and the drive between
+   them actually allow. Lateness therefore cascades, which is the entire point. */
+function projectVehicle(state, vehicleId, tripIds) {
+  const veh = state.vById[vehicleId];
+  const traffic = state.day.traffic;
+  const crewId = state.plan.crew[vehicleId];
+  const crew = crewId ? state.cById[crewId] : null;
+  const legs = [];
+  let cursorLoc = veh.base;
+  let cursorTime = crew ? crew.shiftStart : 300;
+  let deadheadMi = 0, lateMin = 0, driveMin = 0, revenueMin = 0, failures = 0;
+
+  const sorted = tripIds.slice().sort((a, b) => state.tById[a].pickup - state.tById[b].pickup);
+
+  for (let i = 0; i < sorted.length; i++) {
+    const t = state.tById[sorted[i]];
+
+    /* A completed trip is history: its realised times are replayed, never
+       recomputed. Otherwise raising traffic at 2pm would retroactively make
+       the morning late, and "actual on-time" would be a moving target. */
+    if (t.actual) {
+      legs.push({ tripId: t.id, repoMin: t.actual.repoMin, repoMi: t.actual.repoMi,
+        earliest: cursorTime, start: t.actual.start, end: t.actual.end,
+        late: t.actual.late, slack: 0, dur: t.actual.dur, frozen: true,
+        /* The car demonstrably made this drive, so re-costing it against
+           this afternoon's worse traffic proves nothing. Only a previous leg
+           still running at this departure is a real contradiction. */
+        impossible: cursorTime > t.actual.start + 0.5 });
+      deadheadMi += t.actual.repoMi; driveMin += t.actual.repoMin; revenueMin += t.actual.dur;
+      lateMin += t.actual.late; if (t.actual.late > SERVICE_FAIL) failures++;
+      cursorLoc = H.endLoc(t); cursorTime = t.actual.end;
+      continue;
+    }
+
+    const repoMin = H.travelMin(cursorLoc, t.from, cursorTime, traffic);
+    const repoMi  = H.miles(cursorLoc, t.from);
+    const earliest = cursorTime + repoMin;
+    /* A trip already under way departed when it departed; only the drive still
+       ahead of it is re-costed against current traffic. */
+    const start = t.startedAt != null ? t.startedAt : Math.max(t.pickup, earliest);
+    const late = Math.max(0, start - t.pickup);
+    const dur = H.serviceMin(t, start, traffic);
+    const end = start + dur;
+
+    legs.push({
+      tripId: t.id, repoMin, repoMi, earliest, start, end, late,
+      slack: Math.max(0, t.pickup - earliest), dur, started: t.startedAt != null,
+      /* a started trip departed when it departed; only a previous leg still
+         running at that moment is physically impossible */
+      impossible: t.startedAt != null && cursorTime > t.startedAt + 0.5
+    });
+    deadheadMi += repoMi; driveMin += repoMin; revenueMin += dur;
+    lateMin += late; if (late > SERVICE_FAIL) failures++;
+    cursorLoc = H.endLoc(t); cursorTime = end;
+  }
+
+  const shiftEnd = crew ? crew.shiftEnd : 1440;
+  const overtimeMin = Math.max(0, cursorTime - shiftEnd);
+  return { vehicleId, crewId, legs, deadheadMi, lateMin, driveMin, revenueMin,
+           overtimeMin, failures, finishAt: cursorTime, finishLoc: cursorLoc };
+}
+
+/* full projection: every vehicle, plus the trip-level index the UI reads */
+function project(state) {
+  const byVehicle = {};
+  state.fleet.vehicles.forEach(v => byVehicle[v.id] = []);
+  const unassigned = [], affiliate = [];
+  state.day.trips.forEach(function (t) {
+    const a = state.plan.assign[t.id];
+    if (a === 'AFFILIATE') affiliate.push(t.id);
+    else if (a && byVehicle[a]) byVehicle[a].push(t.id);
+    else unassigned.push(t.id);
+  });
+
+  const vehicles = {}, leg = {};
+  let deadheadMi = 0, lateMin = 0, overtimeMin = 0, failures = 0, revenueMin = 0, driveMin = 0;
+  let onTime = 0, assignedCount = 0, thinBuffer = 0;
+
+  state.fleet.vehicles.forEach(function (v) {
+    const p = projectVehicle(state, v.id, byVehicle[v.id]);
+    vehicles[v.id] = p;
+    p.legs.forEach(function (l) {
+      leg[l.tripId] = l; assignedCount++;
+      if (l.late <= LATE_THRESHOLD) onTime++;
+      if (l.slack > 0 && l.slack < 10) thinBuffer++;
+    });
+    deadheadMi += p.deadheadMi; lateMin += p.lateMin; overtimeMin += p.overtimeMin;
+    failures += p.failures; revenueMin += p.revenueMin; driveMin += p.driveMin;
+  });
+
+  /* Lifecycle roll-up, and the honest split: what actually happened so far is
+     measured, what is still ahead is projected. Reporting one number for both
+     would let a good morning hide a broken afternoon, and vice versa. */
+  const byStatus = { dispatched: 0, enroute: 0, onlocation: 0, onboard: 0,
+                     complete: 0, missed: 0, unassigned: 0, affiliate: 0 };
+  const status = {};
+  let doneCount = 0, doneOnTime = 0;
+  state.day.trips.forEach(function (t) {
+    const s = statusOf(state, t, leg[t.id]);
+    status[t.id] = s; byStatus[s]++;
+    if (s === 'complete') { doneCount++; if (leg[t.id].late <= LATE_THRESHOLD) doneOnTime++; }
+  });
+
+  const total = state.day.trips.length;
+  return {
+    byVehicle, vehicles, leg, unassigned, affiliate, status, byStatus,
+    totals: {
+      trips: total, assigned: assignedCount,
+      completed: doneCount, completedOnTime: doneOnTime,
+      actualOnTimePct: doneCount ? (doneOnTime / doneCount) * 100 : null,
+      unassigned: unassigned.length, affiliate: affiliate.length,
+      deadheadMi, lateMin, overtimeMin, failures, revenueMin, driveMin, thinBuffer,
+      onTime, onTimePct: total ? (onTime / total) * 100 : 100,
+      vehiclesUsed: state.fleet.vehicles.filter(v => byVehicle[v.id].length).length,
+      utilPct: revenueMin + driveMin > 0
+        ? (revenueMin / (revenueMin + driveMin)) * 100 : 0
+    }
+  };
+}
+
+/* ================= hard constraints =================
+   Static feasibility of putting `trip` on `vehicle` with the vehicle's crew.
+   Returns [] when legal. Used identically by the optimizer, drag-and-drop,
+   and the auditor. */
+function staticViolations(state, trip, vehicleId, proj) {
+  const out = [];
+  const veh = state.vById[vehicleId];
+  if (!veh) { out.push({ code: CODE.UNASSIGNED, trip: trip.id }); return out; }
+
+  /* Class and capacity are properties of the vehicle and the booking, so they
+     hold for a trip whenever it ran. Everything after them - crew, shifts,
+     service windows - describes the car's CURRENT state, and judging a trip
+     that already happened against it reports the past as illegal because of
+     something that happened afterwards. */
+  const history = trip.startedAt != null;
+
+  if (!H.canCover(veh.cls, trip.reqCls))
+    out.push({ code: CODE.CLASS, trip: trip.id, vehicle: vehicleId,
+      detail: H.CLASS_LABEL[veh.cls] + ' cannot cover a ' + H.CLASS_LABEL[trip.reqCls] + ' request' });
+
+  if (trip.pax > veh.cap)
+    out.push({ code: CODE.CAPACITY, trip: trip.id, vehicle: vehicleId,
+      detail: trip.pax + ' passengers, capacity ' + veh.cap });
+
+  if (history) return out;
+
+  const crewId = state.plan.crew[vehicleId];
+  if (!crewId) {
+    out.push({ code: CODE.NO_CREW, trip: trip.id, vehicle: vehicleId,
+      detail: veh.label + ' has no chauffeur' });
+  } else {
+    const c = state.cById[crewId];
+    if (trip.vip && c.tier < H.VIP_MIN_TIER)
+      out.push({ code: CODE.TIER, trip: trip.id, vehicle: vehicleId, chauffeur: crewId,
+        detail: c.name + ' is ' + H.TIER[c.tier] + '; VIP requires ' + H.TIER[H.VIP_MIN_TIER] + ' or above' });
+  }
+
+  /* timing-dependent checks need the projected window */
+  const l = proj && proj.leg[trip.id];
+  const start = l ? l.start : trip.pickup;
+  const end   = l ? l.end   : trip.pickup + 60;
+
+  if (veh.oos && start < veh.oos.to && end > veh.oos.from)
+    out.push({ code: CODE.OOS, trip: trip.id, vehicle: vehicleId,
+      detail: veh.label + ' out of service ' + H.hhmm(veh.oos.from) + '-' + H.hhmm(veh.oos.to) });
+
+  if (crewId) {
+    const c = state.cById[crewId];
+    /* start-of-shift is tested against the BOOKED pickup: the projection has
+       already pushed the trip to the driver's on-duty time, so comparing the
+       projected start would be comparing shiftStart to itself. */
+    if (trip.pickup < c.shiftStart - 15 || end > c.shiftEnd + OVERTIME_HARD_CAP)
+      out.push({ code: CODE.SHIFT, trip: trip.id, vehicle: vehicleId, chauffeur: crewId,
+        detail: c.name + ' shift ' + H.hhmm(c.shiftStart) + '-' + H.hhmm(c.shiftEnd) +
+                ', trip booked ' + H.hhmm(trip.pickup) + ' and runs to ' + H.hhmm(end) });
+  }
+  return out;
+}
+
+/* Whole-plan validation. Enumerates the PLAN, not a written checklist, so a
+   trip nobody remembered to look at still gets checked. */
+function validate(state, proj) {
+  proj = proj || project(state);
+  const v = [];
+
+  state.day.trips.forEach(function (t) {
+    const a = state.plan.assign[t.id];
+    if (a === 'AFFILIATE') return;
+    if (!a) { v.push({ code: CODE.UNASSIGNED, trip: t.id, detail: 'no vehicle assigned' }); return; }
+    staticViolations(state, t, a, proj).forEach(x => v.push(x));
+  });
+
+  /* the plan must not contradict what already happened */
+  state.day.trips.forEach(function (t) {
+    const l = proj.leg[t.id];
+    if (l && l.impossible)
+      v.push({ code: CODE.HISTORY, trip: t.id, vehicle: state.plan.assign[t.id],
+        detail: t.ref + ' departed at ' + H.hhmm(l.start) + ' but the car cannot get there until ' +
+                H.hhmm(l.earliest) });
+  });
+
+  /* a chauffeur may crew at most one vehicle */
+  const seen = {};
+  Object.keys(state.plan.crew).forEach(function (vid) {
+    const cid = state.plan.crew[vid]; if (!cid) return;
+    if (seen[cid]) v.push({ code: CODE.CREW_DUP, chauffeur: cid, vehicle: vid,
+      detail: state.cById[cid].name + ' is crewed to ' + state.vById[seen[cid]].label +
+              ' and ' + state.vById[vid].label });
+    else seen[cid] = vid;
+  });
+
+  /* an unavailable chauffeur must not be crewed at all */
+  Object.keys(state.plan.crew).forEach(function (vid) {
+    const cid = state.plan.crew[vid]; if (!cid) return;
+    const c = state.cById[cid];
+    if (!c.available) v.push({ code: CODE.SHIFT, chauffeur: cid, vehicle: vid,
+      detail: c.name + ' is marked unavailable' });
+  });
+
+  return v;
+}
+
+/* ================= objective =================
+   Decomposable so the optimizer can re-score one vehicle at a time. */
+function latePenalty(min) {
+  if (min <= 0) return 0;
+  let p = min;
+  if (min > 15) p += (min - 15) * 2;
+  if (min > 30) p += (min - 30) * 3;   /* convex: one 45-min failure beats three 15s */
+  return p;
+}
+function disruptionPenalty(state, trip, fromV, toV) {
+  if (fromV === toV) return 0;
+  if (!fromV) return 0;                /* placing an unassigned trip is free */
+  let p = 8;
+  if (trip.notified) p *= 3;           /* chauffeur already named to the customer */
+  if (trip.vip)      p *= 2;
+  /* The closer the car is to the curb, the more a change costs. Recalling a
+     driver who set off an hour ago is bad; turning one away who is already
+     parked outside the client's building is worse. */
+  const s = state.lastStatus && state.lastStatus[trip.id];
+  if (s === 'enroute')    p *= 2;
+  if (s === 'onlocation') p *= 4;
+  return p;
+}
+
+function vehicleCost(state, w, p) {
+  return w.late * p.legs.reduce((s, l) => s + latePenalty(l.late), 0)
+       + w.deadhead * p.deadheadMi
+       + w.overtime * p.overtimeMin;
+}
+
+function cost(state, proj, baseline) {
+  const w = state.weights;
+  proj = proj || project(state);
+  let c = 0;
+  state.fleet.vehicles.forEach(v => { c += vehicleCost(state, w, proj.vehicles[v.id]); });
+  c += w.unassigned * proj.unassigned.length;
+  /* Farming out must be priced against lateness in the same units, or the
+     optimizer discovers that giving the trip away is cheaper than running it
+     four minutes late. At the balanced weights this sits between a 20-minute
+     delay (~66) and a 45-minute service failure (~330). */
+  c += w.affiliate * proj.affiliate.length * AFFILIATE_FEE;
+
+  if (baseline) {
+    state.day.trips.forEach(function (t) {
+      c += w.disruption * disruptionPenalty(state, t, baseline.assign[t.id], state.plan.assign[t.id]);
+    });
+  }
+  state.day.trips.forEach(function (t) {
+    if (t.prefChauffeur) {
+      const vid = state.plan.assign[t.id];
+      const cid = vid && vid !== 'AFFILIATE' ? state.plan.crew[vid] : null;
+      if (cid !== t.prefChauffeur) c += w.pref;
+    }
+  });
+  return c;
+}
+
+/* money view - kept separate from the objective so nobody confuses a weight with a dollar */
+function economics(proj) {
+  return {
+    deadheadMi: proj.totals.deadheadMi,
+    deadheadCost: proj.totals.deadheadMi * 1.15,
+    overtimeCost: (proj.totals.overtimeMin / 60) * 41,
+    affiliateCost: proj.totals.affiliate * AFFILIATE_FEE
+  };
+}
+
+G.HM = {
+  CODE, CODE_TEXT, PRESETS, AFFILIATE_FEE, LATE_THRESHOLD, SERVICE_FAIL, OVERTIME_HARD_CAP,
+  STATUS, STATUS_LABEL, ENROUTE_LEAD, ONLOCATION_LEAD, statusOf, committed, midRun,
+  emptyPlan, clonePlan, index, project, projectVehicle,
+  staticViolations, validate, cost, vehicleCost, latePenalty, disruptionPenalty, economics
+};
+})(window);
+
+</script>
+<script>
+/* ---- optimizer.js ---- */
+/* Harmony - dispatch optimizer.
+   Greedy construction, constraint repair, crew re-pairing, then time-boxed
+   ruin-and-recreate local search. Every counter reported to the UI is
+   incremented here by work that actually happened. */
+(function (G) {
+'use strict';
+const H = G.HX, M = G.HM;
+
+function workState(state, plan) {
+  /* clock and lastStatus travel with the working state: without them the
+     optimizer cannot tell the past from the future and will happily re-plan
+     trips that already happened. */
+  return { fleet: state.fleet, day: state.day, weights: state.weights,
+           vById: state.vById, cById: state.cById, tById: state.tById,
+           clock: state.clock == null ? 0 : state.clock,
+           lastStatus: state.lastStatus, plan: plan };
+}
+
+/* Trips the optimizer is not allowed to touch: pinned by the operator, or
+   already under way. */
+function immovable(state, t) { return t.locked || M.committed(state, t); }
+
+/* trips currently on a vehicle */
+function tripsOn(plan, day, vehicleId) {
+  const out = [];
+  for (let i = 0; i < day.trips.length; i++) {
+    const t = day.trips[i];
+    if (plan.assign[t.id] === vehicleId) out.push(t.id);
+  }
+  return out;
+}
+
+/* marginal cost of the vehicle, with an explicit trip list */
+function vCost(ws, vehicleId, tripIds) {
+  return M.vehicleCost(ws, ws.weights, M.projectVehicle(ws, vehicleId, tripIds));
+}
+
+/* ---------- candidate evaluation ----------
+   Returns {ok, delta, reasons[]} for putting `trip` on `vehicleId`.
+   `reasons` is populated on rejection and is what the Explain drawer shows. */
+function evaluate(ws, trip, vehicleId, baseTrips, stats) {
+  stats.candidates++;
+  const veh = ws.vById[vehicleId];
+  const reasons = [];
+
+  if (!H.canCover(veh.cls, trip.reqCls))
+    reasons.push(H.CLASS_LABEL[veh.cls] + ' cannot cover a ' + H.CLASS_LABEL[trip.reqCls] + ' request');
+  if (trip.pax > veh.cap)
+    reasons.push('capacity ' + veh.cap + ', trip carries ' + trip.pax);
+
+  const crewId = ws.plan.crew[vehicleId];
+  if (!crewId) reasons.push('no chauffeur crewed to this vehicle');
+  else {
+    const c = ws.cById[crewId];
+    if (!c.available) reasons.push(c.name + ' is unavailable');
+    if (trip.vip && c.tier < H.VIP_MIN_TIER)
+      reasons.push(c.name + ' is ' + H.TIER[c.tier] + '; VIP requires ' + H.TIER[H.VIP_MIN_TIER] + '+');
+  }
+  if (reasons.length) return { ok: false, reasons: reasons, vehicleId: vehicleId };
+
+  const before = vCost(ws, vehicleId, baseTrips);
+  const withT = baseTrips.concat([trip.id]);
+  const p = M.projectVehicle(ws, vehicleId, withT);
+
+  /* Time-dependent checks are made against the WHOLE resulting chain, not just
+     the trip being placed. Inserting mid-chain pushes everything after it, so a
+     check that only looked at this trip's own window would happily build a car
+     whose last job finishes three hours past its driver's shift. */
+  const leg = p.legs.filter(l => l.tripId === trip.id)[0];
+
+  const broke = p.legs.filter(l => l.impossible)[0];
+  if (broke) {
+    reasons.push('would put ' + veh.label + ' somewhere else when ' +
+                 ws.tById[broke.tripId].ref + ' already departed at ' + H.hhmm(broke.start));
+    return { ok: false, reasons: reasons, vehicleId: vehicleId };
+  }
+
+  if (veh.oos) {
+    const clash = p.legs.filter(l => l.start < veh.oos.to && l.end > veh.oos.from)[0];
+    if (clash) {
+      reasons.push(veh.label + ' out of service ' + H.hhmm(veh.oos.from) + '-' + H.hhmm(veh.oos.to) +
+                   (clash.tripId === trip.id ? '' : ' (would strand ' + ws.tById[clash.tripId].ref + ')'));
+      return { ok: false, reasons: reasons, vehicleId: vehicleId };
+    }
+  }
+  if (crewId) {
+    const c = ws.cById[crewId];
+    /* The start-of-shift test must use the REQUESTED pickup, not the projected
+       start: projectVehicle already pushes a trip forward to the moment the
+       driver comes on duty, so testing leg.start would compare shiftStart to
+       itself and the constraint could never fire. */
+    if (trip.pickup < c.shiftStart - 15) {
+      reasons.push(c.name + ' comes on duty at ' + H.hhmm(c.shiftStart) +
+                   '; pickup is booked for ' + H.hhmm(trip.pickup));
+      return { ok: false, reasons: reasons, vehicleId: vehicleId };
+    }
+    if (p.overtimeMin > M.OVERTIME_HARD_CAP) {
+      const last = p.legs[p.legs.length - 1];
+      reasons.push(c.name + ' is off at ' + H.hhmm(c.shiftEnd) + '; the car would not finish until ' +
+                   H.hhmm(p.finishAt) + ' (' + Math.round(p.overtimeMin) + ' min OT, cap ' +
+                   M.OVERTIME_HARD_CAP + ')' +
+                   (last && last.tripId !== trip.id ? ' because ' + ws.tById[last.tripId].ref + ' is pushed back' : ''));
+      return { ok: false, reasons: reasons, vehicleId: vehicleId };
+    }
+  }
+
+  stats.feasible++;
+  const after = M.vehicleCost(ws, ws.weights, p);
+  return { ok: true, delta: after - before, vehicleId: vehicleId,
+           late: leg.late, repoMi: leg.repoMi, slack: leg.slack, start: leg.start };
+}
+
+/* Best vehicle for a trip. Also returns the near-misses, ranked, for Explain. */
+function bestFor(ws, trip, stats, baselinePlan, excludeV) {
+  const cache = {};
+  let best = null; const rejected = []; const feasible = [];
+  for (let i = 0; i < ws.fleet.vehicles.length; i++) {
+    const vid = ws.fleet.vehicles[i].id;
+    if (vid === excludeV) continue;
+    const list = cache[vid] || (cache[vid] = tripsOn(ws.plan, ws.day, vid));
+    const r = evaluate(ws, trip, vid, list, stats);
+    if (!r.ok) { rejected.push(r); continue; }
+    const disr = baselinePlan
+      ? ws.weights.disruption * M.disruptionPenalty(ws, trip, baselinePlan.assign[trip.id], vid) : 0;
+    r.score = r.delta + disr;
+    feasible.push(r);
+    if (!best || r.score < best.score) best = r;
+  }
+  feasible.sort((a, b) => a.score - b.score);
+  return { best: best, feasible: feasible, rejected: rejected };
+}
+
+/* ---------- crew re-pairing ----------
+   Swap chauffeurs between two vehicles when doing so fixes a tier violation or
+   lowers overtime. This is a real dispatcher move and it is legible on screen. */
+/* Can this chauffeur legally work this car's existing chain? Tier alone is not
+   enough - a swap that fixes a VIP tier gap while handing the car to a driver
+   who goes off duty three hours early just trades one violation for another. */
+function crewFits(ws, vehicleId, chauffeurId, tripIds) {
+  if (!chauffeurId) return false;
+  const c = ws.cById[chauffeurId];
+  if (!c.available) return false;
+  for (let i = 0; i < tripIds.length; i++) {
+    const t = ws.tById[tripIds[i]];
+    /* You cannot change who is driving a car that is already carrying a
+       client. Whoever started the trip finishes it. */
+    if (M.midRun(ws, t) && ws.plan.crew[vehicleId] !== chauffeurId) return false;
+    if (t.vip && c.tier < H.VIP_MIN_TIER) return false;
+    if (t.pickup < c.shiftStart - 15) return false;
+  }
+  if (!tripIds.length) return true;
+  const saved = ws.plan.crew[vehicleId];
+  ws.plan.crew[vehicleId] = chauffeurId;
+  const p = M.projectVehicle(ws, vehicleId, tripIds);
+  ws.plan.crew[vehicleId] = saved;
+  return p.overtimeMin <= M.OVERTIME_HARD_CAP;
+}
+
+function repairCrew(ws, stats, log) {
+  const vehicles = ws.fleet.vehicles;
+  let fixed = 0;
+
+  /* First: a chauffeur who has called out is crewed to nothing, even an idle
+     car. Skipping empty cars leaves an unavailable driver on the roster
+     indefinitely and no later pass ever looks at it again. */
+  vehicles.forEach(function (v) {
+    const cid = ws.plan.crew[v.id];
+    /* ...unless they are mid-run. Whoever started a trip finishes it. */
+    const midRun = tripsOn(ws.plan, ws.day, v.id).some(id => M.midRun(ws, ws.tById[id]));
+    if (cid && !ws.cById[cid].available && !midRun) {
+      ws.plan.crew[v.id] = null;
+      if (!tripsOn(ws.plan, ws.day, v.id).length)
+        log.push({ kind: 'crew', vehicle: v.id, from: cid, to: null, partner: null,
+          why: ws.cById[cid].name + ' unavailable; car has no work and is stood down' });
+    }
+  });
+
+  for (let i = 0; i < vehicles.length; i++) {
+    const vid = vehicles[i].id;
+    const list = tripsOn(ws.plan, ws.day, vid);
+    if (!list.length) continue;
+    const needsVip = list.some(id => ws.tById[id].vip);
+    const cid = ws.plan.crew[vid];
+    const c = cid ? ws.cById[cid] : null;
+    const broken = !crewFits(ws, vid, cid, list);
+    if (!broken) continue;
+
+    /* find a partner vehicle whose chauffeur can take this and vice versa */
+    let done = false;
+    for (let j = 0; j < vehicles.length && !done; j++) {
+      if (i === j) continue;
+      const ovid = vehicles[j].id;
+      const ocid = ws.plan.crew[ovid];
+      if (!ocid) continue;
+      const oc = ws.cById[ocid];
+      stats.crewSwapsTested++;
+      const olist = tripsOn(ws.plan, ws.day, ovid);
+      /* both sides of the swap must end up legal, or it is not a fix */
+      if (!crewFits(ws, vid, ocid, list)) continue;
+      if (!crewFits(ws, ovid, cid, olist)) continue;
+
+      ws.plan.crew[ovid] = cid || null;
+      ws.plan.crew[vid] = ocid;
+      log.push({ kind: 'crew', vehicle: vid, from: cid, to: ocid, partner: ovid,
+        why: needsVip && (!c || c.tier < H.VIP_MIN_TIER)
+          ? 'VIP work on ' + ws.vById[vid].label + ' requires ' + H.TIER[H.VIP_MIN_TIER] + '+'
+          : !c ? 'car was unstaffed'
+          : !c.available ? c.name + ' is unavailable'
+          : 'shift window does not cover the car’s work' });
+      fixed++; done = true;
+    }
+    /* nobody to swap with: pull an idle chauffeur off the bench */
+    if (!done) {
+      const used = {}; Object.keys(ws.plan.crew).forEach(k => { if (ws.plan.crew[k]) used[ws.plan.crew[k]] = 1; });
+      for (let k = 0; k < ws.fleet.chauffeurs.length; k++) {
+        const cand = ws.fleet.chauffeurs[k];
+        stats.crewSwapsTested++;
+        if (used[cand.id]) continue;
+        if (!crewFits(ws, vid, cand.id, list)) continue;
+        ws.plan.crew[vid] = cand.id;
+        log.push({ kind: 'crew', vehicle: vid, from: cid, to: cand.id, partner: null,
+          why: 'idle ' + H.TIER[cand.tier] + ' chauffeur available' });
+        fixed++; break;
+      }
+    }
+  }
+  return fixed;
+}
+
+/* ---------- initial construction ---------- */
+function buildInitial(state) {
+  const plan = M.emptyPlan();
+  const ws = workState(state, plan);
+  const stats = newStats();
+
+  /* Crew the fleet. Two things matter and they pull against each other:
+     shift coverage (demand is morning-heavy, so most cars need an early driver)
+     and tier (VIP work can only ride with Professional or Principal). Pair by
+     walking both queues, biased toward early shifts in the ratio the demand
+     profile actually asks for. */
+  const avail = state.fleet.chauffeurs.filter(c => c.available);
+  const byTier = (a, b) => b.tier - a.tier || a.shiftStart - b.shiftStart;
+  const early = avail.filter(c => c.shiftStart < 480).sort(byTier);
+  const late  = avail.filter(c => c.shiftStart >= 480).sort(byTier);
+  /* Shift cover is balanced WITHIN each class, not across the fleet as a whole.
+     Spreading by fleet position silently correlates shift with class - four vans
+     in a row all draw late drivers and then no van can serve a 7am pickup. */
+  let ei = 0, li = 0;
+  ['suv', 'van', 'sedan'].forEach(function (cls) {
+    const group = state.fleet.vehicles.filter(v => v.cls === cls);
+    const wantEarlyCount = Math.round(group.length * 0.6);
+    group.forEach(function (v, i) {
+      const wantEarly = i < wantEarlyCount;
+      let c = null;
+      if (wantEarly && ei < early.length) c = early[ei++];
+      else if (!wantEarly && li < late.length) c = late[li++];
+      else if (ei < early.length) c = early[ei++];
+      else if (li < late.length) c = late[li++];
+      plan.crew[v.id] = c ? c.id : null;
+    });
+  });
+
+  /* Place trips chronologically within priority bands. Building chains forward
+     in time costs far less cascading lateness than inserting mid-chain. */
+  const order = state.day.trips.slice().sort(function (a, b) {
+    const rank = t => (t.vip ? 0 : 1);
+    return (rank(a) - rank(b)) || (a.pickup - b.pickup);
+  });
+  order.forEach(function (t) {
+    const r = bestFor(ws, t, stats, null, null);
+    plan.assign[t.id] = r.best ? r.best.vehicleId : null;
+  });
+  repairCrew(ws, stats, []);
+  /* anything still homeless goes to an affiliate rather than silently vanishing */
+  state.day.trips.forEach(function (t) {
+    if (!plan.assign[t.id]) {
+      const r = bestFor(ws, t, stats, null, null);
+      plan.assign[t.id] = r.best ? r.best.vehicleId : 'AFFILIATE';
+      if (plan.assign[t.id] === 'AFFILIATE') t.affiliate = true;
+    }
+  });
+  return plan;
+}
+
+function newStats() {
+  return { candidates: 0, feasible: 0, movesTested: 0, movesAccepted: 0,
+           iterations: 0, crewSwapsTested: 0, ms: 0, costBefore: 0, costAfter: 0 };
+}
+
+/* ---------- the optimizer ---------- */
+function optimize(state, opts) {
+  opts = opts || {};
+  const budgetMs = opts.budgetMs || 220;
+  const t0 = (G.performance || Date).now();
+  const stats = newStats();
+  const baseline = M.clonePlan(state.plan);
+  const plan = M.clonePlan(state.plan);
+  const ws = workState(state, plan);
+  const rnd = H.rng(opts.seed || (state.day.seed ^ Object.keys(plan.assign).length));
+  const crewLog = [];
+  const explain = {};   /* tripId -> {feasible, rejected} kept for the Explain drawer */
+
+  stats.costBefore = M.cost(workState(state, baseline), M.project(workState(state, baseline)), baseline);
+
+  /* --- phase 1: crew repair (an illegal crewing blocks every trip on the car) --- */
+  repairCrew(ws, stats, crewLog);
+
+  /* --- phase 2: constraint repair --- */
+  const proj0 = M.project(ws);
+  const broken = [];
+  state.day.trips.forEach(function (t) {
+    if (immovable(state, t)) return;
+    const a = plan.assign[t.id];
+    if (!a) { broken.push({ t: t, why: 'unassigned' }); return; }
+    if (a === 'AFFILIATE') { broken.push({ t: t, why: 'farmed out' }); return; }
+    const v = M.staticViolations(ws, t, a, proj0);
+    if (v.length) { broken.push({ t: t, why: M.CODE_TEXT[v[0].code] }); return; }
+    const leg = proj0.leg[t.id];
+    if (leg && leg.late > M.LATE_THRESHOLD) broken.push({ t: t, why: 'projected ' + Math.round(leg.late) + ' min late' });
+  });
+  broken.sort(function (a, b) {
+    const rank = x => (x.t.vip ? 0 : 1);
+    return (rank(a) - rank(b)) || (a.t.pickup - b.t.pickup);
+  });
+
+  broken.forEach(function (b) {
+    const t = b.t;
+    const prev = plan.assign[t.id];
+    plan.assign[t.id] = null;                       /* lift it out first */
+    const r = bestFor(ws, t, stats, baseline, null);
+    explain[t.id] = { feasible: r.feasible.slice(0, 6), rejected: dedupeRejects(r.rejected).slice(0, 8), why: b.why };
+    if (r.best) {
+      plan.assign[t.id] = r.best.vehicleId;
+    } else if (opts.allowAffiliate !== false) {
+      plan.assign[t.id] = 'AFFILIATE';
+    } else {
+      plan.assign[t.id] = prev;
+    }
+  });
+
+  /* --- phase 3: ruin & recreate, time-boxed --- */
+  const movable = state.day.trips.filter(t => !immovable(state, t));
+  let cur = M.cost(ws, M.project(ws), baseline);
+  while ((G.performance || Date).now() - t0 < budgetMs && movable.length > 2) {
+    stats.iterations++;
+    const k = 2 + Math.floor(rnd() * 4);
+    const removed = [], saved = {};
+    for (let i = 0; i < k; i++) {
+      const t = movable[Math.floor(rnd() * movable.length)];
+      if (saved.hasOwnProperty(t.id)) continue;
+      saved[t.id] = plan.assign[t.id];
+      plan.assign[t.id] = null;
+      removed.push(t);
+    }
+    removed.sort((a, b) => (a.vip ? 0 : 1) - (b.vip ? 0 : 1) || a.pickup - b.pickup);
+    removed.forEach(function (t) {
+      stats.movesTested++;
+      const r = bestFor(ws, t, stats, baseline, null);
+      /* No legal home => farm it out. Restoring saved[t.id] here would put the
+         trip back on a car the other reinsertions may have just made illegal,
+         and the cost check below cannot see a hard violation. */
+      plan.assign[t.id] = r.best ? r.best.vehicleId : 'AFFILIATE';
+    });
+    const next = M.cost(ws, M.project(ws), baseline);
+    if (next < cur - 1e-9) { cur = next; stats.movesAccepted++; }
+    else { Object.keys(saved).forEach(id => plan.assign[id] = saved[id]); }
+  }
+
+  /* --- phase 4: invariant. The optimizer must never HAND BACK an illegal plan.
+     An operator may force one by overriding; the optimizer may not produce one.
+     Enumerated from the plan, so a violation nobody anticipated still gets
+     lifted rather than shipped. --- */
+  let guard = 0;
+  while (guard++ < 4) {
+    const bad = M.validate(ws, M.project(ws));
+    if (!bad.length) break;
+    const ids = {};
+    bad.forEach(x => { if (x.trip && !immovable(state, ws.tById[x.trip])) ids[x.trip] = 1; });
+    repairCrew(ws, stats, crewLog);
+    const still = M.validate(ws, M.project(ws));
+    if (!still.length) break;
+    Object.keys(ids).forEach(function (id) {
+      plan.assign[id] = null;
+      const r = bestFor(ws, ws.tById[id], stats, baseline, null);
+      plan.assign[id] = r.best ? r.best.vehicleId : 'AFFILIATE';
+    });
+    if (!Object.keys(ids).length) break;
+  }
+
+  stats.ms = Math.max(1, Math.round((G.performance || Date).now() - t0));
+  const finalProj = M.project(ws);
+  stats.costAfter = M.cost(ws, finalProj, baseline);
+
+  /* --- diff --- */
+  const moves = [];
+  state.day.trips.forEach(function (t) {
+    const from = baseline.assign[t.id], to = plan.assign[t.id];
+    if (from === to) return;
+    moves.push({
+      tripId: t.id, from: from, to: to,
+      fromLabel: from === 'AFFILIATE' ? 'Affiliate' : from ? state.vById[from].label : 'Unassigned',
+      toLabel:   to === 'AFFILIATE' ? 'Affiliate' : to ? state.vById[to].label : 'Unassigned',
+      why: (explain[t.id] && explain[t.id].why) || 'improves the objective',
+      lateBefore: null, lateAfter: finalProj.leg[t.id] ? finalProj.leg[t.id].late : null
+    });
+  });
+  crewLog.forEach(function (c) {
+    moves.push({ kind: 'crew', vehicle: c.vehicle,
+      fromLabel: c.from ? state.cById[c.from].name : 'Unstaffed',
+      toLabel: state.cById[c.to].name, why: c.why,
+      vehicleLabel: state.vById[c.vehicle].label });
+  });
+
+  const beforeProj = M.project(workState(state, baseline));
+  return {
+    plan: plan, stats: stats, moves: moves, explain: explain,
+    before: beforeProj, after: finalProj,
+    delta: {
+      onTimePct: finalProj.totals.onTimePct - beforeProj.totals.onTimePct,
+      deadheadMi: finalProj.totals.deadheadMi - beforeProj.totals.deadheadMi,
+      lateMin: finalProj.totals.lateMin - beforeProj.totals.lateMin,
+      failures: finalProj.totals.failures - beforeProj.totals.failures,
+      affiliate: finalProj.totals.affiliate - beforeProj.totals.affiliate,
+      overtimeMin: finalProj.totals.overtimeMin - beforeProj.totals.overtimeMin,
+      unassigned: finalProj.totals.unassigned - beforeProj.totals.unassigned
+    }
+  };
+}
+
+function dedupeRejects(list) {
+  const seen = {}, out = [];
+  list.forEach(function (r) {
+    const key = r.reasons[0];
+    if (seen[key] && seen[key] >= 2) return;
+    seen[key] = (seen[key] || 0) + 1;
+    out.push(r);
+  });
+  return out;
+}
+
+/* On-demand: why is this trip where it is, and what else was possible?
+   Runs the same evaluation the optimizer runs, so the answer cannot drift
+   away from the decision. */
+function explainTrip(state, tripId) {
+  const stats = newStats();
+  const plan = M.clonePlan(state.plan);
+  const trip = state.tById[tripId];
+  const currentV = plan.assign[tripId];
+  plan.assign[tripId] = null;
+  const ws = workState(state, plan);
+  const r = bestFor(ws, trip, stats, state.plan, null);
+  plan.assign[tripId] = currentV;
+  return {
+    trip: trip, currentV: currentV, stats: stats,
+    feasible: r.feasible.slice(0, 8),
+    rejected: dedupeRejects(r.rejected).slice(0, 10)
+  };
+}
+
+G.HO = { buildInitial, optimize, explainTrip, bestFor, evaluate, workState, tripsOn, newStats };
+})(window);
+
+</script>
+<script>
+/* ---- sim.js ---- */
+/* Harmony - scenario days and disruption injection.
+   Disruptions change the WORLD. They never touch the plan. Whatever damage
+   appears afterwards is damage the model computed, not damage we scripted. */
+(function (G) {
+'use strict';
+const H = G.HX, M = G.HM;
+
+const DAYS = [
+  { id: 'tue', seed: 0x6E55, refBase: 4100, count: 68, traffic: 1.00,
+    vipRate: 0.12, airportRate: 0.42,
+    name: 'Tuesday', date: 'Tue 14 Oct', sub: 'Ordinary weekday',
+    brief: 'A normal book of business with slack in the fleet. This is the baseline: if Harmony cannot hold a clean plan here, nothing else matters.' },
+
+  { id: 'fri', seed: 0x5D82, refBase: 4300, count: 98, traffic: 1.12,
+    vipRate: 0.17, airportRate: 0.50,
+    name: 'Friday', date: 'Fri 17 Oct', sub: 'Near capacity',
+    brief: 'Ninety-eight reservations against thirty cars, eighteen of them VIP, with a heavy evening airport bank. The plan is legal but it is already paying for itself in overtime and a handful of late pickups - there is nowhere left to absorb a surprise.' },
+
+  { id: 'chaos', seed: 0xC4A0, refBase: 4500, count: 92, traffic: 1.30,
+    vipRate: 0.20, airportRate: 0.55,
+    name: 'Storm Thursday', date: 'Thu 23 Oct', sub: 'Complete chaos',
+    brief: 'Weather across the Northeast. Two cars already down, three inbound flights holding, two chauffeurs out, traffic up 30%. There is no clean plan here - the question is which compromise Harmony picks and whether it tells you the truth about it.',
+    preload: true }
+];
+
+function buildDay(cfg) {
+  const day = H.makeDay(cfg);
+  day.preload = cfg.preload || false;
+  return day;
+}
+
+/* pre-baked damage for the chaos day, applied to the WORLD before planning */
+function preload(state) {
+  const veh = state.fleet.vehicles;
+  const suvs = veh.filter(v => v.cls === 'suv');
+  const outs = [suvs[2], suvs[7]];
+  outs.forEach(v => v.oos = { from: 0, to: 1440, reason: 'Mechanical - out all day' });
+
+  const crew = state.fleet.chauffeurs;
+  [crew[4], crew[19]].forEach(c => c.available = false);
+
+  const arrivals = state.day.trips.filter(t => t.svc === 'arrival');
+  arrivals.slice(0, 3).forEach(function (t, i) {
+    const d = [40, 65, 25][i];
+    t.flight.delayMin = d; t.pickup = t.basePickup + d;
+  });
+  return {
+    vehiclesOut: outs.map(v => v.label),
+    crewOut: [crew[4].name, crew[19].name],
+    flights: arrivals.slice(0, 3).map(t => t.flight.code)
+  };
+}
+
+/* ---------- disruptions ---------- */
+/* Each returns { title, detail, affected:[tripId], kind }. `affected` is
+   derived from the plan, not asserted. */
+
+function flightDelay(state, minutes, tripId) {
+  const proj = M.project(state);
+  let t = tripId ? state.tById[tripId] : null;
+  if (!t) {
+    const cands = state.day.trips.filter(x => x.flight && x.svc === 'arrival' &&
+      state.plan.assign[x.id] && state.plan.assign[x.id] !== 'AFFILIATE' &&
+      !x.startedAt && x.pickup > state.clock && (!x.flight.delayMin));
+    if (!cands.length) return null;
+    t = cands[Math.floor(cands.length / 3)];
+  }
+  t.flight.delayMin += minutes;
+  t.pickup = t.basePickup + t.flight.delayMin;
+  const vid = state.plan.assign[t.id];
+  const downstream = (proj.byVehicle[vid] || []).filter(id => state.tById[id].pickup > t.pickup);
+  return {
+    kind: 'flight',
+    title: 'Flight ' + t.flight.code + ' delayed ' + minutes + ' min',
+    detail: t.paxName + ' now lands at ' + H.hhmm(t.pickup - 35) + '. Pickup moves to ' +
+            H.hhmm(t.pickup) + ' on ' + (vid ? state.vById[vid].label : 'no vehicle') + '.',
+    affected: [t.id].concat(downstream)
+  };
+}
+
+function breakdown(state, vehicleId) {
+  const proj = M.project(state);
+  let v = vehicleId ? state.vById[vehicleId] : null;
+  if (!v) {
+    const busy = state.fleet.vehicles
+      .filter(x => !x.oos && proj.byVehicle[x.id].filter(id => !state.tById[id].startedAt).length >= 2);
+    if (!busy.length) return null;
+    const idle = busy.filter(x => !proj.byVehicle[x.id]
+      .some(id => state.tById[id].startedAt && proj.leg[id].end > state.clock));
+    const pool = idle.length ? idle : busy;
+    v = pool[Math.floor(pool.length / 2)];
+  }
+  /* A car carrying a client cannot vanish from under them: it completes the
+     run it is on, then goes down. */
+  const running = proj.byVehicle[v.id]
+    .filter(id => state.tById[id].startedAt && proj.leg[id].end > state.clock)
+    .map(id => proj.leg[id].end);
+  const downFrom = running.length ? Math.max.apply(null, running) : state.clock;
+  v.oos = { from: downFrom, to: 1440, reason: 'Mechanical' };
+  const stranded = proj.byVehicle[v.id].filter(id => !state.tById[id].startedAt);
+  return {
+    kind: 'breakdown',
+    title: v.label + ' out of service',
+    detail: v.model + ' down from ' + H.hhmm(downFrom) +
+            (running.length ? ' (finishing its current run first). ' : '. ') + stranded.length +
+            ' remaining assignment' + (stranded.length === 1 ? '' : 's') + ' need coverage.',
+    affected: stranded
+  };
+}
+
+function callout(state, chauffeurId) {
+  const proj = M.project(state);
+  let c = chauffeurId ? state.cById[chauffeurId] : null;
+  if (!c) {
+    const crewed = {};
+    Object.keys(state.plan.crew).forEach(vid => { if (state.plan.crew[vid]) crewed[state.plan.crew[vid]] = vid; });
+    const cands = state.fleet.chauffeurs.filter(function (x) {
+      if (!x.available || !crewed[x.id]) return false;
+      const list = proj.byVehicle[crewed[x.id]];
+      /* not mid-run: you cannot pull a driver who has a client in the car */
+      if (list.some(id => state.tById[id].startedAt && proj.leg[id].end > state.clock)) return false;
+      return list.filter(id => !state.tById[id].startedAt).length >= 2;
+    });
+    if (!cands.length) return null;
+    c = cands[Math.floor(cands.length / 2)];
+  }
+  c.available = false;
+  let vid = null;
+  Object.keys(state.plan.crew).forEach(k => { if (state.plan.crew[k] === c.id) vid = k; });
+  const affected = vid ? proj.byVehicle[vid].filter(id => !state.tById[id].startedAt) : [];
+  return {
+    kind: 'callout',
+    title: c.name + ' called out',
+    detail: H.TIER[c.tier] + ' chauffeur unavailable from ' + H.hhmm(state.clock) +
+            (vid ? '. ' + state.vById[vid].label + ' is now unstaffed with ' + affected.length + ' assignments.' : '.'),
+    affected: affected
+  };
+}
+
+function trafficSurge(state, mult) {
+  state.day.traffic = Math.min(2.2, state.day.traffic * mult);
+  const proj = M.project(state);
+  const affected = Object.keys(proj.leg).filter(id =>
+    !state.tById[id].startedAt && proj.leg[id].slack < 15 && state.tById[id].pickup > state.clock);
+  return {
+    kind: 'traffic',
+    title: 'Traffic severity raised to ' + state.day.traffic.toFixed(2) + '×',
+    detail: 'Every projected drive time recalculated. ' + affected.length +
+            ' upcoming trips now have under 15 minutes of buffer.',
+    affected: affected
+  };
+}
+
+function lastMinute(state, n) {
+  n = n || 1;
+  const r = H.rng((state.day.seed ^ state.day.nextRef) >>> 0);
+  const added = [];
+  for (let i = 0; i < n; i++) {
+    const t = H.makeTrip(r, state.day.nextRef++, { vipRate: 0.25, airportRate: 0.7 });
+    t.pickup = t.basePickup = Math.min(1380, state.clock + 40 + Math.floor(r() * 70));
+    t.injected = true; t.notified = false;
+    if (t.flight) t.flight.sched = t.pickup - 35;
+    state.day.trips.push(t); state.tById[t.id] = t;
+    state.plan.assign[t.id] = null;
+    added.push(t.id);
+  }
+  state.day.trips.sort((a, b) => a.pickup - b.pickup);
+  const first = state.tById[added[0]];
+  return {
+    kind: 'reservation',
+    title: n === 1 ? 'Last-minute reservation ' + first.ref : n + ' new reservations received',
+    detail: n === 1
+      ? (first.vip ? 'VIP ' : '') + H.CLASS_LABEL[first.reqCls] + ' for ' + first.paxName +
+        ', pickup ' + H.hhmm(first.pickup) + ' at ' + H.LOC[first.from].name + '. Unassigned.'
+      : 'Inbound bank at PHL. All unassigned, earliest pickup ' + H.hhmm(first.pickup) + '.',
+    affected: added
+  };
+}
+
+function airportSurge(state) {
+  const r = H.rng((state.day.seed ^ 0xA17F ^ state.day.nextRef) >>> 0);
+  const added = [];
+  const base = Math.max(state.clock + 45, 17 * 60);
+  for (let i = 0; i < 6; i++) {
+    const t = H.makeTrip(r, state.day.nextRef++, { vipRate: 0.2, airportRate: 1 });
+    t.svc = 'arrival'; t.from = 'PHL';
+    t.to = H.pick(r, H.SUBURBS);
+    t.pickup = t.basePickup = base + i * 9 + Math.floor(r() * 7);
+    t.flight = { code: H.pick(r, H.AIRLINES) + ' ' + (1200 + Math.floor(r() * 700)), sched: t.pickup - 35, delayMin: 0 };
+    t.injected = true; t.notified = false;
+    state.day.trips.push(t); state.tById[t.id] = t;
+    state.plan.assign[t.id] = null;
+    added.push(t.id);
+  }
+  state.day.trips.sort((a, b) => a.pickup - b.pickup);
+  return {
+    kind: 'surge',
+    title: 'Airport bank - 6 arrivals in 50 minutes',
+    detail: 'Diverted aircraft released at PHL from ' + H.hhmm(base) + '. All six unassigned.',
+    affected: added
+  };
+}
+
+function chaos(state) {
+  const events = [];
+  const seq = [
+    () => breakdown(state), () => breakdown(state),
+    () => callout(state), () => callout(state),
+    () => flightDelay(state, 55), () => flightDelay(state, 35),
+    () => trafficSurge(state, 1.28), () => airportSurge(state)
+  ];
+  seq.forEach(function (f) { const e = f(); if (e) events.push(e); });
+  const affected = {};
+  events.forEach(e => e.affected.forEach(id => affected[id] = 1));
+  return {
+    kind: 'chaos',
+    title: 'Complete chaos',
+    detail: events.length + ' simultaneous disruptions. ' + Object.keys(affected).length +
+            ' reservations touched.',
+    affected: Object.keys(affected),
+    events: events
+  };
+}
+
+G.HS = { DAYS, buildDay, preload, flightDelay, breakdown, callout, trafficSurge,
+         lastMinute, airportSurge, chaos };
+})(window);
+
+</script>
+<script>
+/* ---- audit.js ---- */
+/* Harmony - independent plan auditor.
+   This is deliberately NOT the code that builds the plan. It walks the plan
+   that exists and re-derives every hard constraint from the world, including
+   the ones the construction code believes it guarantees. A checker written
+   from the builder's own list can only find what the builder remembered.
+
+   It is allowed to fail, and when it fails the UI says so. */
+(function (G) {
+'use strict';
+const H = G.HX, M = G.HM;
+
+function audit(state) {
+  const checks = [];
+  const failures = [];
+  let performed = 0;
+
+  function check(name, fn) {
+    const res = fn();
+    performed += res.n;
+    checks.push({ name: name, n: res.n, failed: res.bad.length });
+    res.bad.forEach(b => failures.push({ check: name, detail: b }));
+  }
+
+  /* 1. every reservation is accounted for exactly once - walked from the day,
+        then walked back from the plan, so an orphan in either direction shows */
+  check('Reservation coverage', function () {
+    const bad = []; let n = 0;
+    const seen = {};
+    state.day.trips.forEach(function (t) {
+      n++;
+      if (!state.plan.assign.hasOwnProperty(t.id)) bad.push(t.ref + ' missing from the plan entirely');
+      seen[t.id] = 1;
+    });
+    Object.keys(state.plan.assign).forEach(function (id) {
+      n++;
+      if (!seen[id]) bad.push(id + ' is in the plan but not in the day');
+    });
+    return { n: n, bad: bad };
+  });
+
+  const proj = M.project(state);
+
+  /* 2. vehicle class substitution */
+  check('Vehicle class substitution', function () {
+    const bad = []; let n = 0;
+    state.day.trips.forEach(function (t) {
+      const vid = state.plan.assign[t.id];
+      if (!vid || vid === 'AFFILIATE') return;
+      n++;
+      const v = state.vById[vid];
+      if (!H.canCover(v.cls, t.reqCls))
+        bad.push(t.ref + ': ' + H.CLASS_LABEL[v.cls] + ' ' + v.label + ' on a ' +
+                 H.CLASS_LABEL[t.reqCls] + ' request');
+    });
+    return { n: n, bad: bad };
+  });
+
+  /* 3. seated capacity */
+  check('Passenger capacity', function () {
+    const bad = []; let n = 0;
+    state.day.trips.forEach(function (t) {
+      const vid = state.plan.assign[t.id];
+      if (!vid || vid === 'AFFILIATE') return;
+      n++;
+      const v = state.vById[vid];
+      if (t.pax > v.cap) bad.push(t.ref + ': ' + t.pax + ' pax in a ' + v.cap + '-seat ' + v.label);
+    });
+    return { n: n, bad: bad };
+  });
+
+  /* 4. VIP chauffeur tier */
+  check('VIP chauffeur tier', function () {
+    const bad = []; let n = 0;
+    state.day.trips.forEach(function (t) {
+      if (!t.vip) return;
+      const vid = state.plan.assign[t.id];
+      if (!vid || vid === 'AFFILIATE') return;
+      if (t.startedAt != null) return;    /* it ran, with whoever was driving then */
+      n++;
+      const cid = state.plan.crew[vid];
+      if (!cid) { bad.push(t.ref + ': VIP on unstaffed ' + state.vById[vid].label); return; }
+      const c = state.cById[cid];
+      if (c.tier < H.VIP_MIN_TIER)
+        bad.push(t.ref + ': VIP with ' + H.TIER[c.tier] + ' ' + c.name);
+    });
+    return { n: n, bad: bad };
+  });
+
+  /* 5. vehicle availability windows */
+  check('Vehicle service windows', function () {
+    const bad = []; let n = 0;
+    state.fleet.vehicles.forEach(function (v) {
+      if (!v.oos) return;
+      proj.byVehicle[v.id].forEach(function (id) {
+        /* a run already under way completes; going out of service stops the
+           car taking NEW work, it does not undo work already begun */
+        if (state.tById[id].startedAt != null) return;
+        n++;
+        const l = proj.leg[id];
+        if (l.start < v.oos.to && l.end > v.oos.from)
+          bad.push(state.tById[id].ref + ' runs ' + H.hhmm(l.start) + '-' + H.hhmm(l.end) +
+                   ' on ' + v.label + ', out of service ' + H.hhmm(v.oos.from) + '-' + H.hhmm(v.oos.to));
+      });
+    });
+    return { n: n, bad: bad };
+  });
+
+  /* 6. chauffeur shift coverage and hard overtime cap */
+  check('Chauffeur shift coverage', function () {
+    const bad = []; let n = 0;
+    state.fleet.vehicles.forEach(function (v) {
+      const cid = state.plan.crew[v.id];
+      const list = proj.byVehicle[v.id];
+      if (!list.length) return;
+      n++;
+      const future = list.filter(id => state.tById[id].startedAt == null);
+      if (!cid) {
+        if (future.length)
+          bad.push(v.label + ' carries ' + future.length + ' upcoming trips with no chauffeur');
+        return;
+      }
+      const c = state.cById[cid];
+      if (!c.available) { bad.push(v.label + ' crewed to ' + c.name + ', who is unavailable'); return; }
+      /* booked pickups before the driver comes on duty. Checked against the
+         BOOKED time: the projection silently absorbs this as lateness, so a
+         check reading the projection would always pass. */
+      list.forEach(function (id) {
+        const t = state.tById[id];
+        if (t.startedAt != null) return;   /* history, judged when it was planned */
+        n++;
+        if (t.pickup < c.shiftStart - 15)
+          bad.push(t.ref + ' booked ' + H.hhmm(t.pickup) + ' on ' + v.label +
+                   ', but ' + c.name + ' starts at ' + H.hhmm(c.shiftStart));
+      });
+      /* The overtime cap governs what the plan may CHOOSE. Once every remaining
+         job on the car is already under way, running over is an outcome of the
+         day, not an illegal assignment - the optimizer has nothing left it is
+         allowed to move. It is reported under service quality instead. */
+      const p = proj.vehicles[v.id];
+      if (p.overtimeMin > M.OVERTIME_HARD_CAP && future.length)
+        bad.push(c.name + ' runs ' + Math.round(p.overtimeMin) + ' min past shift end (cap ' +
+                 M.OVERTIME_HARD_CAP + '), with ' + future.length + ' trip' +
+                 (future.length === 1 ? '' : 's') + ' still reassignable');
+    });
+    return { n: n, bad: bad };
+  });
+
+  /* 7. one chauffeur, one vehicle */
+  check('Chauffeur single-crewing', function () {
+    const bad = []; let n = 0; const seen = {};
+    Object.keys(state.plan.crew).forEach(function (vid) {
+      const cid = state.plan.crew[vid]; if (!cid) return;
+      n++;
+      if (seen[cid]) bad.push(state.cById[cid].name + ' crewed to both ' +
+        state.vById[seen[cid]].label + ' and ' + state.vById[vid].label);
+      else seen[cid] = vid;
+    });
+    return { n: n, bad: bad };
+  });
+
+  /* 8. physical impossibility: a vehicle in two places at once.
+        The scheduler builds chains sequentially and therefore believes this
+        cannot happen. Checked pairwise anyway, which is the point. */
+  check('No vehicle double-booked', function () {
+    const bad = []; let n = 0;
+    state.fleet.vehicles.forEach(function (v) {
+      const legs = proj.byVehicle[v.id].map(id => proj.leg[id]).sort((a, b) => a.start - b.start);
+      for (let i = 0; i < legs.length; i++) {
+        for (let j = i + 1; j < legs.length; j++) {
+          n++;
+          if (legs[j].start < legs[i].end - 0.01)
+            bad.push(v.label + ': ' + state.tById[legs[i].tripId].ref + ' and ' +
+                     state.tById[legs[j].tripId].ref + ' overlap');
+        }
+      }
+    });
+    return { n: n, bad: bad };
+  });
+
+  /* 9. the car cannot teleport between jobs */
+  check('Repositioning continuity', function () {
+    const bad = []; let n = 0;
+    state.fleet.vehicles.forEach(function (v) {
+      const ids = proj.byVehicle[v.id].slice().sort((a, b) => proj.leg[a].start - proj.leg[b].start);
+      for (let i = 1; i < ids.length; i++) {
+        n++;
+        const prev = state.tById[ids[i - 1]], cur = state.tById[ids[i]];
+        const prevEnd = proj.leg[ids[i - 1]].end, curStart = proj.leg[ids[i]].start;
+        if (cur.startedAt != null) {
+          /* The car actually made this drive. Re-costing it against traffic
+             that got worse afterwards would report history as impossible. The
+             only real contradiction is the previous job still running. */
+          if (curStart < prevEnd - 0.5)
+            bad.push(v.label + ': ' + cur.ref + ' departed at ' + H.hhmm(curStart) +
+                     ' while ' + prev.ref + ' was still running until ' + H.hhmm(prevEnd));
+          continue;
+        }
+        const need = H.travelMin(H.endLoc(prev), cur.from, prevEnd, state.day.traffic);
+        if (curStart < prevEnd + need - 0.5)
+          bad.push(v.label + ': ' + cur.ref + ' starts ' +
+                   Math.round(prevEnd + need - curStart) +
+                   ' min before the car could arrive');
+      }
+    });
+    return { n: n, bad: bad };
+  });
+
+  /* 10. history is immutable: a trip the operation already began must still be
+         on the car that began it, and a completed one must keep the times it
+         actually ran. Enumerated from the trips that carry recorded actuals. */
+  check('Committed trips unchanged', function () {
+    const bad = []; let n = 0;
+    state.day.trips.forEach(function (t) {
+      if (!t.startedAt) return;
+      n++;
+      const now = state.plan.assign[t.id];
+      const ran = t.actual ? t.actual.v : t.startedOn;
+      if (ran && now !== ran)
+        bad.push(t.ref + ' started on ' + (state.vById[ran] ? state.vById[ran].label : ran) +
+                 ' but is now assigned to ' +
+                 (now === 'AFFILIATE' ? 'an affiliate' : now ? state.vById[now].label : 'nothing'));
+      const l = proj.leg[t.id];
+      if (l && Math.abs(l.start - t.startedAt) > 0.5)
+        bad.push(t.ref + ' began at ' + H.hhmm(t.startedAt) + ' but the plan now shows ' + H.hhmm(l.start));
+    });
+    return { n: n, bad: bad };
+  });
+
+  /* 11. locked assignments were respected */
+  check('Locked assignments', function () {
+    const bad = []; let n = 0;
+    state.day.trips.forEach(function (t) {
+      if (!t.locked) return;
+      n++;
+      if (state.plan.assign[t.id] !== t.lockedTo)
+        bad.push(t.ref + ' was locked to ' +
+                 (t.lockedTo ? state.vById[t.lockedTo].label : 'nothing') +
+                 ' but sits on ' + (state.plan.assign[t.id] === 'AFFILIATE' ? 'an affiliate'
+                   : state.plan.assign[t.id] ? state.vById[state.plan.assign[t.id]].label : 'nothing'));
+    });
+    return { n: n, bad: bad };
+  });
+
+  return {
+    checks: checks, failures: failures, performed: performed,
+    clean: failures.length === 0,
+    proj: proj,
+    /* service quality is reported, not asserted clean - lateness is legal */
+    service: {
+      late: Object.keys(proj.leg).filter(id => proj.leg[id].late > M.LATE_THRESHOLD).length,
+      failed: Object.keys(proj.leg).filter(id => proj.leg[id].late > M.SERVICE_FAIL).length,
+      unassigned: proj.unassigned.length,
+      affiliate: proj.affiliate.length
+    }
+  };
+}
+
+G.HA = { audit };
+})(window);
+
+</script>
+<script>
+/* ---- ui.js ---- */
+/* Harmony - interface.
+   Rule for this file: it renders numbers, it does not invent them. Every figure
+   shown comes from HM.project / HM.validate / HO.optimize / HA.audit. If you
+   find a hard-coded metric in here, that is a bug. */
+(function (G) {
+'use strict';
+const H = G.HX, M = G.HM, O = G.HO, SIM = G.HS, AUD = G.HA;
+const $ = s => document.querySelector(s);
+const el = (t, c, h) => { const n = document.createElement(t); if (c) n.className = c; if (h != null) n.innerHTML = h; return n; };
+
+const T0 = 270, T1 = 1470, SPAN = T1 - T0;      /* board window: 04:30 -> 24:30 */
+const xp = m => ((Math.max(T0, Math.min(T1, m)) - T0) / SPAN) * 100;
+
+const S = {
+  fleet: null, day: null, plan: null, dayCfg: null,
+  weights: Object.assign({}, M.PRESETS.balanced), preset: 'balanced',
+  clock: 300, speed: 0, timer: null,
+  proposal: null, history: [], autoOpt: false, problemsOnly: false,
+  focusTrip: null, lastProj: null, lastViol: null, t0: Date.now(),
+  angle: 240, overlayAuto: false, autoTimer: null,
+  lastStatus: null, lastSig: ''
+};
+
+/* The overlay library. Any three of these load onto the prism's three faces.
+   Every one is computed from state that already exists - none of this needed
+   new plumbing. */
+const OVERLAY_LIB = [
+  { id: 'passenger', label: 'Passenger',   color: '#2f8f7a',
+    text: t => t.paxName },
+  { id: 'driver',    label: 'Driver',      color: '#3f6fa8',
+    text: function (t) {
+      const v = S.plan.assign[t.id];
+      if (!v || v === 'AFFILIATE') return 'unassigned';
+      const c = S.cById[S.plan.crew[v]];
+      return c ? c.name : 'unstaffed';
+    } },
+  { id: 'route',     label: 'Route',       color: '#7a5ea8',
+    text: t => t.from + ' → ' + t.to },
+  /* Status carries the lifecycle colour rather than one of its own - the
+     colour IS the datum, so a swatch here would be a second source of truth. */
+  { id: 'status',    label: 'Status',      color: null,
+    text: (t, l, st) => M.STATUS_LABEL[st] || st },
+  { id: 'account',   label: 'Account',     color: '#a8763f',
+    text: t => t.account || 'Retail' },
+  { id: 'vehicle',   label: 'Vehicle',     color: '#4a7c8c',
+    text: function (t) {
+      const v = S.plan.assign[t.id];
+      return !v ? 'unassigned' : v === 'AFFILIATE' ? 'affiliate' : S.vById[v].label;
+    } },
+  { id: 'eta',       label: 'ETA',         color: '#8c6f3f',
+    text: function (t, l, st) {
+      if (!l) return 'req ' + H.hhmm24(t.pickup);
+      if (st === 'complete') return 'done ' + H.hhmm24(l.end);
+      if (st === 'onboard')  return 'arr ' + H.hhmm24(l.end);
+      return 'pu ' + H.hhmm24(l.start) + (l.late > 0.5 ? ' +' + Math.round(l.late) : '');
+    } },
+  { id: 'flight',    label: 'Flight',      color: '#3f8ca8',
+    text: t => t.flight ? t.flight.code + (t.flight.delayMin ? ' +' + t.flight.delayMin : '') : '—' },
+  { id: 'buffer',    label: 'Buffer',      color: '#6b8c3f',
+    text: (t, l) => l ? Math.round(l.slack) + ' min buffer' : '—' },
+  { id: 'deadhead',  label: 'Deadhead',    color: '#8c4a6b',
+    text: (t, l) => l ? l.repoMi.toFixed(1) + ' mi in' : '—' },
+  { id: 'load',      label: 'Pax & class', color: '#5f7a8c',
+    text: t => t.pax + ' pax · ' + H.CLASS_LABEL[t.reqCls] },
+  { id: 'lateness',  label: 'Lateness',    color: '#a8553f',
+    text: (t, l) => !l ? '—' : l.late > 0.5 ? '+' + Math.round(l.late) + ' min' : 'on time' },
+  { id: 'tier',      label: 'Tier',        color: '#7c6ba8',
+    text: function (t) {
+      const v = S.plan.assign[t.id];
+      if (!v || v === 'AFFILIATE') return '—';
+      const c = S.cById[S.plan.crew[v]];
+      return c ? H.TIER[c.tier] : 'unstaffed';
+    } },
+  { id: 'service',   label: 'Service',     color: '#4a8c5f',
+    text: t => svcName(t) }
+];
+const LIB = {}; OVERLAY_LIB.forEach(o => LIB[o.id] = o);
+
+const FACES = 3;
+const STEP = 360 / FACES;                 /* 120 degrees per face */
+const PRISM_MIN_PX = 84;
+const WHEEL_DEG = 0.3;                    /* degrees per unit of wheel delta */
+
+/* Rotation timing. Every bar turns in unison - the staggered wave read as
+   jitter rather than choreography, so it is gone.
+
+   A face is only legible within roughly 25 degrees of flat-on, so the middle of
+   a turn is smear at any speed - hence the strong ease-in-out in the CSS: cross
+   the illegible part quickly, decelerate into the face and settle.
+
+   AUTO_BASE is the 100% mark on the setup slider. The wheel is deliberately
+   exempt from all of this: it follows the hand with no transition at all. */
+const AUTO_BASE = 950;
+const TIMING = {
+  clickMs: 560,          /* you asked for this face; answer promptly */
+  autoMs: AUTO_BASE,     /* ambient turn - set from the setup panel  */
+  autoIntervalMs: 6000
+};
+S.timing = TIMING;   /* attached after declaration: S is defined above this point */
+S.faces = ['driver', 'route', 'passenger'];      /* which overlays are loaded */
+S.faceColor = {};                                 /* overlay id -> hex override */
+S.faceBg = 'status';                              /* 'status' | 'overlay'      */
+const SVC_GLYPH = { arrival: '↓', departure: '↑', waitreturn: '⇄', hourly: '◴' };
+G.HARMONY = S;   /* deliberately exposed: open the console and check the numbers */
+
+/* ================= snapshots (undo) ================= */
+function snapshot() {
+  return {
+    plan: M.clonePlan(S.plan),
+    traffic: S.day.traffic,
+    clock: S.clock,
+    trips: S.day.trips.map(t => ({ id: t.id, pickup: t.pickup, locked: t.locked,
+      lockedTo: t.lockedTo, delay: t.flight ? t.flight.delayMin : 0,
+      startedAt: t.startedAt, startedOn: t.startedOn,
+      actual: t.actual ? Object.assign({}, t.actual) : null })),
+    tripCount: S.day.trips.length,
+    oos: S.fleet.vehicles.map(v => v.oos ? Object.assign({}, v.oos) : null),
+    avail: S.fleet.chauffeurs.map(c => c.available)
+  };
+}
+function restore(s) {
+  S.plan = M.clonePlan(s.plan);
+  S.day.traffic = s.traffic;
+  S.day.trips.length = s.tripCount;
+  const byId = {}; s.trips.forEach(x => byId[x.id] = x);
+  S.day.trips.forEach(function (t) {
+    const x = byId[t.id]; if (!x) return;
+    t.pickup = x.pickup; t.locked = x.locked; t.lockedTo = x.lockedTo;
+    t.startedAt = x.startedAt; t.startedOn = x.startedOn;
+    t.actual = x.actual ? Object.assign({}, x.actual) : null;
+    if (t.flight) t.flight.delayMin = x.delay;
+  });
+  S.fleet.vehicles.forEach((v, i) => v.oos = s.oos[i] ? Object.assign({}, s.oos[i]) : null);
+  S.fleet.chauffeurs.forEach((c, i) => c.available = s.avail[i]);
+  M.index(S);
+}
+function push() { S.history.push(snapshot()); if (S.history.length > 25) S.history.shift(); $('#undoBtn').disabled = false; }
+
+/* ================= boot ================= */
+function boot() {
+  buildDayTabs();
+  buildStrategy();
+  applyOverlayColors();
+  buildBubbles();
+  buildSetup();
+  buildStatusKey();
+  buildAxis();
+  wire();
+  loadDay('tue', true);
+}
+
+function buildDayTabs() {
+  const n = $('#days'); n.innerHTML = '';
+  SIM.DAYS.forEach(function (d) {
+    const b = el('button', d.preload ? 'hard' : '',
+      '<b>' + d.name + '</b><small>' + d.date + ' · ' + d.sub + '</small>');
+    b.onclick = () => loadDay(d.id);
+    b.dataset.day = d.id;
+    n.appendChild(b);
+  });
+}
+
+function buildStrategy() {
+  const n = $('#strategy'); n.innerHTML = '';
+  ['service', 'balanced', 'efficiency'].forEach(function (k) {
+    const b = el('button', k === S.preset ? 'on' : '', M.PRESETS[k].name.toUpperCase());
+    b.onclick = () => setPreset(k);
+    b.dataset.p = k;
+    n.appendChild(b);
+  });
+  hintWeights();
+}
+function setPreset(k) {
+  S.preset = k; S.weights = Object.assign({}, M.PRESETS[k]);
+  document.querySelectorAll('#strategy button').forEach(b => b.classList.toggle('on', b.dataset.p === k));
+  hintWeights();
+  logLine('sys', 'Objective weights changed', M.PRESETS[k].name + ' — lateness ×' + S.weights.late +
+    ', deadhead ×' + S.weights.deadhead + ', disruption ×' + S.weights.disruption +
+    '. The current plan is unchanged; reoptimize to see what these weights choose.');
+  clearProposal();
+  if (S.autoOpt) runOptimize('weights changed');
+}
+function hintWeights() {
+  const w = S.weights;
+  $('#wHint').textContent = 'late ×' + w.late + ' · deadhead ×' + w.deadhead + ' · overtime ×' +
+    w.overtime + ' · disruption ×' + w.disruption + ' · affiliate ×' + w.affiliate +
+    '. These are the real coefficients in the objective function.';
+}
+
+function buildBubbles() {
+  const n = $('#bubbles'); n.innerHTML = '';
+  S.faces.forEach(function (id, i) {
+    const b = el('button', 'bub', LIB[id].label);
+    b.dataset.face = i;
+    b.onclick = () => setFace(i, false);
+    n.appendChild(b);
+  });
+  const a = el('button', 'bub auto', 'Auto');
+  a.dataset.face = 'auto';
+  a.onclick = () => setFace(frontFace(), !S.overlayAuto);
+  n.appendChild(a);
+  markBubbles();
+}
+
+/* Which face is presented, derived from the free rotation angle rather than
+   stored separately - so a wheel-parked prism and a clicked one are the same
+   state, and there is nothing to keep in sync. */
+function frontFace() { return ((Math.round(S.angle / STEP) % FACES) + FACES) % FACES; }
+function offAxis()   { return Math.abs(((S.angle % STEP) + STEP + STEP / 2) % STEP - STEP / 2); }
+
+function setFace(i, auto) {
+  S.overlayAuto = !!auto;
+  clearInterval(S.autoTimer); S.autoTimer = null;
+  /* rotate to the nearest congruent angle so the board never spins the long
+     way round to reach an adjacent face */
+  const target = i * STEP;
+  S.angle = target + 360 * Math.round((S.angle - target) / 360);
+  applyRotation(true);
+  if (auto) {
+    S.autoTimer = setInterval(function () {
+      S.angle += STEP;
+      applyRotation(true);
+    }, S.timing.autoIntervalMs);
+  }
+}
+
+/* Push the angle onto every prism. The stagger is keyed to horizontal
+   position, so the board turns as one wave sweeping left to right instead of
+   ninety-eight things twitching at once. */
+function applyRotation(animate) {
+  const ms = S.overlayAuto ? S.timing.autoMs : S.timing.clickMs;
+  document.querySelectorAll('.trip .prism').forEach(function (p) {
+    p.style.transitionDuration = animate ? ms + 'ms' : '0ms';
+    p.style.setProperty('--rot', S.angle.toFixed(2) + 'deg');
+  });
+  paintFlat();
+  markBubbles();
+}
+
+/* Bars too narrow to carry a face swap their label instead of rotating. */
+function paintFlat() {
+  const proj = S.lastProj; if (!proj) return;
+  const id = S.faces[frontFace()];
+  document.querySelectorAll('.trip.flat .nm').forEach(function (nm) {
+    const host = nm.closest('.trip'); if (!host) return;
+    const t = S.tById[host.dataset.t]; if (!t) return;
+    const next = overlayText(t, proj.leg[t.id], proj.status[t.id], id);
+    if (nm.textContent === next) return;
+    nm.textContent = next;
+    nm.classList.remove('swap'); void nm.offsetWidth; nm.classList.add('swap');
+  });
+}
+
+function markBubbles() {
+  const front = frontFace(), between = offAxis() > 12;
+  document.querySelectorAll('#bubbles .bub').forEach(function (b) {
+    if (b.dataset.face === 'auto') {
+      b.classList.toggle('on', S.overlayAuto);
+      b.classList.remove('near');
+      return;
+    }
+    const isFront = +b.dataset.face === front;
+    b.classList.toggle('on', isFront && !between);
+    b.classList.toggle('near', isFront && between);
+  });
+  $('#angleRead').textContent = between
+    ? Math.round(offAxis()) + '° off ' + LIB[S.faces[front]].label.toLowerCase()
+    : LIB[S.faces[front]].label;
+}
+
+function overlayText(t, l, st, which) {
+  const o = LIB[which || S.faces[frontFace()]];
+  return o ? String(o.text(t, l, st)) : '';
+}
+
+/* Pick legible ink for an arbitrary background. A colour picker will hand us
+   anything, so contrast has to be derived, not chosen. */
+function inkFor(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+  if (!m) return '#05090d';
+  const n = parseInt(m[1], 16);
+  const lin = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const L = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  return L > 0.34 ? '#05090d' : '#f2f6fa';
+}
+function overlayColor(id) { return S.faceColor[id] || (LIB[id] && LIB[id].color) || '#5c6b7e'; }
+
+function applyOverlayColors() {
+  const r = document.documentElement;
+  OVERLAY_LIB.forEach(function (o) {
+    if (!o.color) return;                       /* status has no colour of its own */
+    const c = overlayColor(o.id);
+    r.style.setProperty('--ov-' + o.id, c);
+    r.style.setProperty('--ovink-' + o.id, inkFor(c));
+  });
+}
+
+/* ================= board setup =================
+   A popover rather than a modal, deliberately: colour and speed are judged by
+   looking at the board, so the board has to stay visible while you change them. */
+function buildSetup() {
+  const n = $('#setup');
+  const opts = id => OVERLAY_LIB.map(o =>
+    '<option value="' + o.id + '"' + (o.id === id ? ' selected' : '') + '>' + o.label + '</option>').join('');
+
+  n.innerHTML =
+    '<div class="setuphead"><b>Board setup</b>' +
+      '<button class="setupclose" id="setupClose" aria-label="Close">×</button></div>' +
+
+    '<p class="setupnote">Three of ' + OVERLAY_LIB.length +
+      ' overlays load onto the prism’s three faces.</p>' +
+    '<div class="slots" id="slots">' +
+      S.faces.map(function (id, i) {
+        return '<div class="slot"><span class="slotno">' + (i + 1) + '</span>' +
+          '<select data-slot="' + i + '">' + opts(id) + '</select>' +
+          (id === 'status'
+            ? '<span class="bystatus" title="Status carries the lifecycle colour">by status</span>'
+            : '<input type="color" data-col="' + id + '" value="' + overlayColor(id) + '">') +
+          '</div>';
+      }).join('') +
+    '</div>' +
+
+    '<h5>Face background</h5>' +
+    '<div class="segrow" id="bgSeg">' +
+      '<button data-bg="status"' + (S.faceBg === 'status' ? ' class="on"' : '') + '>Status colour</button>' +
+      '<button data-bg="overlay"' + (S.faceBg === 'overlay' ? ' class="on"' : '') + '>Overlay colour</button>' +
+    '</div>' +
+    '<p class="setupnote">Status colour shows every face in the trip’s lifecycle colour. ' +
+      'Overlay colour gives each face its own — except Status, which always tracks the lifecycle.</p>' +
+
+    '<h5>Auto rotation</h5>' +
+    '<div class="sliderow"><input type="range" id="spdRange" min="300" max="1600" step="10" ' +
+      'value="' + S.timing.autoMs + '"><span id="spdRead"></span></div>' +
+    '<p class="setupnote">Turns every 6s. The wheel is unaffected — it follows your hand ' +
+      'with no animation at all, so you keep precise control.</p>';
+
+  $('#setupClose').onclick = closeSetup;
+
+  n.querySelectorAll('select[data-slot]').forEach(function (sel) {
+    sel.onchange = function () {
+      const i = +sel.dataset.slot, id = sel.value, had = S.faces.indexOf(id);
+      /* if it is already on another face, swap them rather than leaving a duplicate */
+      if (had !== -1 && had !== i) S.faces[had] = S.faces[i];
+      S.faces[i] = id;
+      buildSetup(); buildBubbles(); render(); applyRotation(false);
+    };
+  });
+
+  n.querySelectorAll('input[data-col]').forEach(function (inp) {
+    inp.oninput = function () {
+      S.faceColor[inp.dataset.col] = inp.value;
+      applyOverlayColors();          /* one style write; no re-render needed */
+    };
+  });
+
+  n.querySelectorAll('#bgSeg button').forEach(function (b) {
+    b.onclick = function () {
+      S.faceBg = b.dataset.bg;
+      buildSetup(); render(); applyRotation(false);
+    };
+  });
+
+  const rng = $('#spdRange');
+  const showSpeed = () => {
+    $('#spdRead').textContent = S.timing.autoMs + ' ms · ' +
+      Math.round(S.timing.autoMs / AUTO_BASE * 100) + '%';
+  };
+  rng.oninput = function () { S.timing.autoMs = +rng.value; showSpeed(); };
+  showSpeed();
+}
+function openSetup() { $('#setup').hidden = false; }
+function closeSetup() { $('#setup').hidden = true; }
+
+function buildStatusKey() {
+  const n = $('#statusKey'); n.innerHTML = '';
+  M.STATUS.forEach(function (st) {
+    n.appendChild(el('span', '', '<i class="sw st-' + st + '"></i>' + M.STATUS_LABEL[st]));
+  });
+  n.appendChild(el('span', '', '<i class="sw vipk"></i>VIP'));
+  n.appendChild(el('span', '', '<i class="sw ghostk"></i>Proposed'));
+}
+
+function buildAxis() {
+  const a = $('#axis'); a.innerHTML = '';
+  for (let m = 300; m <= 1440; m += 60) {
+    const p = xp(m);
+    const t = el('i'); t.style.left = p + '%'; a.appendChild(t);
+    if (m % 120 === 0) { const b = el('b', '', H.hhmm(m).replace(':00', '')); b.style.left = p + '%'; a.appendChild(b); }
+  }
+}
+
+/* ================= day loading ================= */
+function loadDay(id, first) {
+  const cfg = SIM.DAYS.filter(d => d.id === id)[0];
+  S.dayCfg = cfg;
+  S.fleet = H.buildFleet();          /* deterministic: a fresh, clean world every time */
+  S.day = SIM.buildDay(cfg);
+  S.plan = M.emptyPlan();
+  M.index(S);
+  S.clock = 300; S.history = []; S.proposal = null; S.lastSig = ''; S.lastStatus = null;
+  $('#undoBtn').disabled = true;
+
+  let pre = null;
+  if (cfg.preload) pre = SIM.preload(S);
+
+  S.plan = O.buildInitial(S);
+  M.index(S);
+  /* The overnight planning run from the design notes: construction gives a
+     feasible plan, this settles it. Same optimizer the operator drives by hand. */
+  const settle = O.optimize(S, { budgetMs: 900, allowAffiliate: true });
+  S.plan = settle.plan;
+  M.index(S);
+  S.settleStats = settle.stats;
+
+  document.querySelectorAll('#days button').forEach(b => b.classList.toggle('on', b.dataset.day === id));
+  $('#brief').innerHTML = '<b>' + cfg.name + ' — ' + cfg.sub + '.</b> ' + cfg.brief;
+  $('#log').innerHTML = '';
+  clearProposal();
+  render();
+
+  const p = S.lastProj;
+  logLine('sys', 'Day loaded — ' + cfg.name,
+    S.day.trips.length + ' reservations · ' + S.fleet.vehicles.length + ' vehicles · ' +
+    S.fleet.chauffeurs.length + ' chauffeurs. Overnight plan built: greedy construction, then ' +
+    S.settleStats.iterations.toLocaleString() + ' local-search iterations over ' +
+    S.settleStats.candidates.toLocaleString() + ' evaluated pairings in ' + S.settleStats.ms + ' ms.');
+  if (pre) {
+    logLine('bad', 'Day begins already damaged',
+      'Out of service: ' + pre.vehiclesOut.join(', ') + '. Called out: ' + pre.crewOut.join(', ') +
+      '. Holding: ' + pre.flights.join(', ') + '. Traffic ' + S.day.traffic.toFixed(2) + '×.');
+  }
+  reportState('Initial plan');
+  setSpeed(0);
+  if (first) setTimeout(() => toast('ok', 'Try to break it', 'Drag a trip onto a car that cannot take it. Inject a disruption. Then hit AUDIT and see whether Harmony is telling you the truth.'), 900);
+}
+
+/* ================= rendering ================= */
+function render() {
+  const proj = M.project(S);
+  const viol = M.validate(S, proj);
+  S.lastProj = proj; S.lastViol = viol;
+  S.lastStatus = proj.status;   /* the objective prices a change by how close the car is */
+
+  const vbad = {};
+  viol.forEach(v => { if (v.trip) (vbad[v.trip] = vbad[v.trip] || []).push(v); });
+
+  renderKpis(proj, viol);
+  renderRows(proj, vbad);
+  renderUnassigned(proj, vbad);
+  renderStatus(proj, viol);
+
+  markBubbles();
+  $('#boardsub').textContent = S.day.trips.length + ' reservations · ' +
+    proj.totals.vehiclesUsed + '/' + S.fleet.vehicles.length + ' vehicles working · traffic ' +
+    S.day.traffic.toFixed(2) + '×';
+  positionNow();
+}
+
+function renderKpis(proj, viol) {
+  const t = proj.totals;
+  const econ = M.economics(proj);
+  const tiles = [
+    { k: t.completed ? 'ON-TIME, WHOLE DAY' : 'PROJECTED ON-TIME', v: t.onTimePct.toFixed(1) + '%',
+      s: t.completed ? t.completed + ' measured, ' + (t.trips - t.completed) + ' projected'
+                     : t.onTime + ' of ' + t.trips + ' within ' + M.LATE_THRESHOLD + ' min',
+      cls: t.onTimePct > 93 ? 'good' : t.onTimePct > 82 ? 'warn' : 'bad' },
+    { k: 'HARD VIOLATIONS', v: String(viol.length),
+      s: viol.length ? 'plan is illegal' : 'all constraints hold',
+      cls: viol.length ? 'bad' : 'good' },
+    { k: 'SERVICE FAILURES', v: String(t.failures),
+      s: 'over ' + M.SERVICE_FAIL + ' min late',
+      cls: t.failures ? 'warn' : 'good' },
+    { k: 'UNASSIGNED', v: String(t.unassigned),
+      s: t.affiliate + ' farmed to affiliate', cls: t.unassigned ? 'bad' : '' },
+    { k: 'COMPLETED', v: t.completed + ' of ' + t.trips,
+      s: t.actualOnTimePct == null ? 'day has not started'
+        : t.actualOnTimePct.toFixed(1) + '% on time, actual',
+      cls: t.actualOnTimePct == null ? '' : t.actualOnTimePct > 93 ? 'good' : t.actualOnTimePct > 82 ? 'warn' : 'bad' },
+    { k: 'DEADHEAD', v: Math.round(t.deadheadMi) + ' mi',
+      s: '$' + Math.round(econ.deadheadCost) + ' unbilled', cls: '' },
+    { k: 'OVERTIME', v: Math.round(t.overtimeMin) + ' min',
+      s: '$' + Math.round(econ.overtimeCost) + ' premium', cls: t.overtimeMin > 240 ? 'warn' : '' }
+  ];
+  $('#kpis').innerHTML = tiles.map(x =>
+    '<div class="kpi"><span>' + x.k + '</span><strong class="' + x.cls + '">' + x.v +
+    '</strong><em>' + x.s + '</em></div>').join('');
+}
+
+/* Violations sitting on assignments the operator pinned. Harmony will not break
+   a lock to fix itself, so these are reported as a standoff rather than as the
+   optimizer having failed. */
+function lockedConflicts(viol) {
+  const s = {};
+  viol.forEach(v => { if (v.trip && S.tById[v.trip] && S.tById[v.trip].locked) s[v.trip] = 1; });
+  return Object.keys(s);
+}
+
+function renderStatus(proj, viol) {
+  const p = $('#statepill'), t = proj.totals;
+  const lc = lockedConflicts(viol);
+  let cls = '', txt = 'PLAN STABLE';
+  if (viol.length && lc.length === viol.length) {
+    cls = 'bad'; txt = lc.length + ' LOCK CONFLICT' + (lc.length > 1 ? 'S' : '');
+  }
+  else if (viol.length) { cls = 'bad'; txt = viol.length + ' CONSTRAINT' + (viol.length > 1 ? 'S' : '') + ' BROKEN'; }
+  else if (t.unassigned) { cls = 'bad'; txt = t.unassigned + ' UNASSIGNED'; }
+  else if (t.failures) { cls = 'risk'; txt = t.failures + ' SERVICE FAILURE' + (t.failures > 1 ? 'S' : ''); }
+  else if (t.onTimePct < 97) { cls = 'risk'; txt = 'AT RISK'; }
+  p.className = 'statepill ' + cls;
+  p.querySelector('span').textContent = txt;
+  $('#intelTitle').textContent =
+    viol.length && lc.length === viol.length ? 'Blocked by locks' :
+    viol.length ? 'Plan is illegal' : t.unassigned ? 'Coverage gap' :
+    t.failures ? 'Degraded service' : 'Monitoring';
+}
+
+/* Which background a face wears.
+   In status mode every face shows the trip's lifecycle colour. In overlay mode
+   each face wears its own - except Status, whose colour IS its data, so it
+   always tracks the lifecycle regardless of mode. */
+function faceVars(id, i) {
+  const useStatus = (S.faceBg === 'status' || id === 'status' || !id);
+  return '--i:' + i +
+    ';--fbg:' + (useStatus ? 'var(--bar)' : 'var(--ov-' + id + ')') +
+    ';--fink:' + (useStatus ? 'var(--barink)' : 'var(--ovink-' + id + ')');
+}
+
+function prismHtml(t, l, st, wide) {
+  const face = (id, i) =>
+    '<div class="face" style="' + faceVars(id, i) + '">' +
+      '<span class="ref">' + t.ref + '</span>' +
+      '<span class="svc" title="' + svcName(t) + '">' + SVC_GLYPH[t.svc] + '</span>' +
+      '<span class="nm">' + overlayText(t, l, st, id) + '</span>' +
+    '</div>';
+  /* A narrow bar gets a single face and never turns: rotating a 24px sliver is
+     motion without information. */
+  return '<div class="prism">' +
+    (wide ? S.faces.map((id, i) => face(id, i)).join('')
+          : face(S.faces[frontFace()], 0)) +
+    '</div>';
+}
+
+function renderRows(proj, vbad) {
+  const wrap = $('#rows');
+  const ghosts = S.proposal ? S.proposal.plan.assign : null;
+  const trackW = Math.max(200, $('#gridwrap').clientWidth - 150);
+  wrap.innerHTML = '';
+  S.fleet.vehicles.forEach(function (v) {
+    const p = proj.vehicles[v.id];
+    const crewId = S.plan.crew[v.id];
+    const c = crewId ? S.cById[crewId] : null;
+    const row = el('div', 'vrow' + (v.oos ? ' oos' : ''));
+    row.dataset.v = v.id;
+
+    const crewCls = !c || !c.available ? 'none' : 't' + c.tier;
+    const crewTxt = !c ? 'UNSTAFFED' : (!c.available ? c.name + ' — OUT' : c.name + ' · ' + H.TIER[c.tier]);
+    row.appendChild(el('div', 'vlabel',
+      '<span class="cls ' + v.cls + '">' + H.CLASS_LABEL[v.cls].toUpperCase().slice(0, 3) + '</span>' +
+      '<span class="vmeta"><b>' + v.label + (v.oos ? ' ✕' : '') + '</b>' +
+      '<small class="' + crewCls + '">' + crewTxt + '</small></span>'));
+
+    const track = el('div', 'track');
+    p.legs.forEach(function (l) {
+      const t = S.tById[l.tripId];
+      const broken = vbad[t.id] && vbad[t.id].length;
+      const st = proj.status[t.id];
+      const cls = 'trip st-' + st + (t.vip ? ' vip' : '') +
+        (broken ? ' broken' : l.late > M.LATE_THRESHOLD ? ' late' : '') +
+        (t.locked ? ' locked' : '') + (M.committed(S, t) ? ' committed' : '') +
+        (t.injected ? ' injected' : '') +
+        (S.problemsOnly && !broken && l.late <= M.LATE_THRESHOLD ? ' dim' : '') +
+        (ghosts && ghosts[t.id] !== v.id ? ' moving' : '');
+      const wPct = Math.max(1.1, (Math.min(l.end, T1) - Math.max(l.start, T0)) / SPAN * 100);
+      const wide = (wPct / 100) * trackW >= PRISM_MIN_PX;
+      const b = el('div', cls + (wide ? '' : ' flat'), prismHtml(t, l, st, wide));
+      b.style.left = xp(l.start) + '%';
+      b.style.width = wPct + '%';
+      b.querySelector('.prism').style.setProperty('--rot', S.angle.toFixed(2) + 'deg');
+      b.draggable = !t.locked && !M.committed(S, t);
+      b.dataset.t = t.id;
+      b.title = tipFor(t, l, vbad[t.id]);
+      b.tabIndex = 0;   /* the board is operable from the keyboard, not just the mouse */
+      b.addEventListener('dragstart', onDragStart);
+      b.addEventListener('click', e => { e.stopPropagation(); openTrip(t.id); });
+      b.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openTrip(t.id); }
+      });
+      track.appendChild(b);
+    });
+
+    if (ghosts) {
+      Object.keys(ghosts).forEach(function (tid) {
+        if (ghosts[tid] !== v.id || S.plan.assign[tid] === v.id) return;
+        const t = S.tById[tid];
+        const gl = S.proposal.after.leg[tid];
+        if (!gl) return;
+        const g = el('div', 'ghost', t.ref + ' ' + t.paxName);
+        g.style.left = xp(gl.start) + '%';
+        g.style.width = Math.max(1.1, (Math.min(gl.end, T1) - Math.max(gl.start, T0)) / SPAN * 100) + '%';
+        track.appendChild(g);
+      });
+    }
+
+    row.appendChild(track);
+    row.addEventListener('dragover', onDragOver);
+    row.addEventListener('dragleave', () => row.classList.remove('drop', 'nodrop'));
+    row.addEventListener('drop', onDrop);
+    wrap.appendChild(row);
+  });
+}
+
+function renderUnassigned(proj, vbad) {
+  const n = $('#unrow');
+  const list = proj.unassigned.concat(proj.affiliate);
+  n.innerHTML = '';
+  const lbl = el('div', 'vlabel', '<span class="vmeta"><b>UNASSIGNED</b><small>' +
+    proj.unassigned.length + ' open · ' + proj.affiliate.length + ' affiliate</small></span>');
+  n.appendChild(lbl);
+  const track = el('div', 'track');
+  if (!list.length) track.appendChild(el('div', '',
+    '<span style="font:500 10.5px/28px var(--mono);color:var(--ink3);padding-left:8px">Every reservation has a car.</span>'));
+  list.forEach(function (id) {
+    const t = S.tById[id];
+    const aff = S.plan.assign[id] === 'AFFILIATE';
+    const missed = !aff && S.clock > t.pickup;
+    const b = el('div', 'trip flat ' + (aff ? 'st-affiliate' : missed ? 'st-missed' : 'st-unassigned') +
+      (t.vip ? ' vip' : '') + (aff ? '' : ' broken') + (t.injected ? ' injected' : ''),
+      '<div class="prism"><div class="face" style="--i:0">' +
+      '<span class="ref">' + t.ref + '</span><span class="nm">' + t.paxName + ' · ' +
+      H.hhmm(t.pickup) + ' · ' + H.CLASS_LABEL[t.reqCls] + (aff ? ' · AFFILIATE' : '') +
+      '</span></div></div>');
+    b.draggable = true; b.dataset.t = t.id;
+    b.addEventListener('dragstart', onDragStart);
+    b.addEventListener('click', e => { e.stopPropagation(); openTrip(t.id); });
+    track.appendChild(b);
+  });
+  n.appendChild(track);
+}
+
+function tipFor(t, l, bad) {
+  let s = t.ref + '  ' + t.paxName + (t.account ? ' (' + t.account + ')' : '') +
+    '\n' + svcName(t) + '  ' + H.LOC[t.from].name + ' → ' + H.LOC[t.to].name +
+    '\nBooked ' + H.hhmm(t.pickup) + '   projected ' + H.hhmm(l.start) +
+    (l.late > 0.5 ? '   (' + Math.round(l.late) + ' min late)' : '   (on time)') +
+    '\n' + t.pax + ' pax · ' + H.CLASS_LABEL[t.reqCls] + ' requested' + (t.vip ? ' · VIP' : '') +
+    '\nDeadhead in ' + l.repoMi.toFixed(1) + ' mi, buffer ' + Math.round(l.slack) + ' min';
+  if (bad && bad.length) s += '\n\n! ' + bad.map(b => M.CODE_TEXT[b.code]).join('\n! ');
+  return s;
+}
+function svcName(t) {
+  return { arrival: 'Airport arrival', departure: 'Airport departure',
+           waitreturn: 'Wait & return', hourly: 'Hourly as directed' }[t.svc];
+}
+
+function positionNow() {
+  const n = $('#nowline');
+  n.style.left = 'calc(150px + (100% - 150px) * ' + (xp(S.clock) / 100) + ')';
+  $('#nowlabel').textContent = H.hhmm24(S.clock);
+}
+
+/* ================= log ================= */
+/* Log stamps carry seconds so successive entries are distinguishable even while
+   the simulation clock is paused. The minute is the simulated minute; the
+   seconds are real elapsed time in this session. */
+function stamp() {
+  return H.hhmm24(S.clock) + ':' + String(Math.floor((Date.now() - S.t0) / 1000) % 60).padStart(2, '0');
+}
+function logLine(kind, title, text) {
+  const n = el('div', 'li ' + kind,
+    '<time>' + stamp() + '</time><div class="body"><b>' + title + '</b>' +
+    (text ? '<p>' + text + '</p>' : '') + '</div>');
+  $('#log').appendChild(n);
+  $('#log').scrollTop = $('#log').scrollHeight;
+  return n;
+}
+function reportState(prefix) {
+  const p = S.lastProj, v = S.lastViol;
+  logLine(v.length ? 'bad' : p.totals.failures ? 'warn' : 'ok',
+    prefix + (v.length ? ' — ' + v.length + ' hard violation' + (v.length > 1 ? 's' : '') : ' — feasible'),
+    p.totals.onTimePct.toFixed(1) + '% projected on-time · ' + p.totals.failures + ' service failure' +
+    (p.totals.failures === 1 ? '' : 's') + ' · ' + p.totals.unassigned + ' unassigned · ' +
+    Math.round(p.totals.deadheadMi) + ' deadhead mi · ' + Math.round(p.totals.overtimeMin) + ' overtime min');
+}
+
+/* ================= optimize ================= */
+function runOptimize(reason) {
+  const btn = $('#optBtn');
+  btn.disabled = true; btn.textContent = 'WORKING…';
+  const before = M.project(S);
+  const beforeViol = M.validate(S, before);
+
+  /* the run happens now, in full. The lines below reveal its real counters in
+     sequence so the operator can follow the reasoning - the numbers are
+     measurements taken from this run, not a script. */
+  const res = O.optimize(S, { budgetMs: 240 });
+  S.proposal = res;
+
+  const steps = [
+    ['sys', 'Scanning plan' + (reason ? ' — ' + reason : ''),
+      S.day.trips.length + ' reservations, ' + before.totals.vehiclesUsed + ' vehicles working, ' +
+      Object.keys(before.leg).length + ' legs re-timed through the traffic model at ' +
+      S.day.traffic.toFixed(2) + '×.'],
+    [beforeViol.length ? 'bad' : 'sys', 'Checking hard constraints',
+      beforeViol.length ? beforeViol.length + ' violation' + (beforeViol.length > 1 ? 's' : '') + ': ' +
+        summarise(beforeViol) : 'No hard violations. ' + before.totals.failures +
+        ' trips projected more than ' + M.SERVICE_FAIL + ' min late.'],
+    ['sys', 'Evaluating alternatives',
+      res.stats.candidates.toLocaleString() + ' vehicle–trip pairings evaluated, ' +
+      res.stats.feasible.toLocaleString() + ' feasible (' +
+      (res.stats.candidates ? Math.round(res.stats.feasible / res.stats.candidates * 100) : 0) +
+      '%). ' + res.stats.crewSwapsTested.toLocaleString() + ' chauffeur re-pairings tested.'],
+    ['sys', 'Local search',
+      res.stats.iterations.toLocaleString() + ' ruin-and-recreate iterations, ' +
+      res.stats.movesTested.toLocaleString() + ' reinsertions, ' + res.stats.movesAccepted +
+      ' accepted. Objective ' + Math.round(res.stats.costBefore).toLocaleString() + ' → ' +
+      Math.round(res.stats.costAfter).toLocaleString() + ' in ' + res.stats.ms + ' ms.']
+  ];
+
+  let i = 0;
+  const running = logLine('sys run', 'Optimizing', 'Locked assignments held fixed.');
+  const iv = setInterval(function () {
+    if (i < steps.length) { logLine(steps[i][0], steps[i][1], steps[i][2]); i++; return; }
+    clearInterval(iv);
+    running.classList.remove('run');
+    btn.disabled = false; btn.textContent = '◈ REOPTIMIZE';
+    finishOptimize(res);
+  }, 210);
+}
+
+function summarise(viol) {
+  const c = {};
+  viol.forEach(v => c[v.code] = (c[v.code] || 0) + 1);
+  return Object.keys(c).map(k => c[k] + '× ' + M.CODE_TEXT[k]).join('; ');
+}
+
+/* Say plainly when the only thing standing between the plan and legality is a
+   lock the operator set. The fix belongs to them, not to the optimizer. */
+function reportLocks() {
+  const viol = M.validate(S, M.project(S));
+  const lc = lockedConflicts(viol);
+  if (!lc.length) return;
+  logLine('bad', lc.length + ' locked assignment' + (lc.length > 1 ? 's are' : ' is') + ' now infeasible',
+    lc.map(function (id) {
+      const t = S.tById[id];
+      const v = viol.filter(x => x.trip === id)[0];
+      return t.ref + ' ' + t.paxName + ' — ' + (v.detail || M.CODE_TEXT[v.code]);
+    }).join('\n') +
+    '\nHarmony will not break a lock to repair itself. Unlock ' +
+    (lc.length > 1 ? 'these' : 'this') + ' and reoptimize, or move ' +
+    (lc.length > 1 ? 'them' : 'it') + ' by hand.');
+}
+
+function finishOptimize(res) {
+  reportLocks();
+  const moves = res.moves.filter(m => !m.kind);
+  const crew = res.moves.filter(m => m.kind === 'crew');
+  if (!moves.length && !crew.length) {
+    S.proposal = null;
+    logLine('ok', 'No better plan found',
+      'The current assignment is already the best this objective can find. Nothing moved.');
+    render();
+    toast('ok', 'Plan already optimal', 'Harmony evaluated ' + res.stats.candidates.toLocaleString() +
+      ' pairings and kept the plan as it stands.');
+    return;
+  }
+  logLine('ok', 'Proposal ready',
+    moves.length + ' reassignment' + (moves.length === 1 ? '' : 's') +
+    (crew.length ? ' and ' + crew.length + ' chauffeur re-pairing' + (crew.length === 1 ? '' : 's') : '') +
+    '. Ghost bars show where the trips would go.');
+  renderProposal(res);
+  render();
+}
+
+function renderProposal(res) {
+  const d = res.delta, b = res.before.totals, a = res.after.totals;
+  const vBefore = M.validate(S, res.before).length;
+  const wsAfter = O.workState(S, res.plan); M.index(wsAfter);
+  const vAfter = M.validate(wsAfter, res.after).length;
+
+  const cell = (label, before, after, betterLower) => {
+    const same = Math.abs(after - before) < 0.05;
+    const good = betterLower ? after < before : after > before;
+    return '<div><span>' + label + '</span><b class="' + (same ? 'flat' : good ? 'up' : 'down') + '">' +
+      fmt(before) + ' → ' + fmt(after) + '</b></div>';
+  };
+  const fmt = n => Math.abs(n % 1) > 0.01 ? n.toFixed(1) : String(Math.round(n));
+
+  $('#propGrid').innerHTML =
+    cell('ON-TIME %', b.onTimePct, a.onTimePct, false) +
+    cell('HARD VIOLATIONS', vBefore, vAfter, true) +
+    cell('SERVICE FAILURES', b.failures, a.failures, true) +
+    cell('DEADHEAD MI', b.deadheadMi, a.deadheadMi, true);
+
+  $('#propCount').textContent = res.moves.length + ' change' + (res.moves.length === 1 ? '' : 's') +
+    ' · ' + res.stats.ms + ' ms';
+
+  $('#propMoves').innerHTML = res.moves.map(function (m) {
+    if (m.kind === 'crew') {
+      return '<div class="mv"><span class="ar">⇄</span><span class="txt"><b>' + m.vehicleLabel +
+        ' crew: ' + m.fromLabel + ' → ' + m.toLabel + '</b><small>' + m.why + '</small></span></div>';
+    }
+    const t = S.tById[m.tripId];
+    return '<div class="mv" data-t="' + m.tripId + '"><span class="ar">→</span><span class="txt"><b>' +
+      t.ref + ' ' + t.paxName + ': ' + m.fromLabel + ' → ' + m.toLabel + '</b><small>' +
+      cap(m.why) + (m.lateAfter != null ? ' · projected ' +
+        (m.lateAfter > 0.5 ? Math.round(m.lateAfter) + ' min late' : 'on time') : '') +
+      '</small></span></div>';
+  }).join('');
+  $('#propMoves').querySelectorAll('.mv[data-t]').forEach(n =>
+    n.onclick = () => openTrip(n.dataset.t));
+
+  $('#proposal').classList.remove('hidden');
+}
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function applyProposal() {
+  if (!S.proposal) return;
+  push();
+  S.plan = M.clonePlan(S.proposal.plan);
+  const n = S.proposal.moves.length;
+  S.proposal = null;
+  $('#proposal').classList.add('hidden');
+  M.index(S);
+  render();
+  logLine('ok', 'Plan applied', n + ' change' + (n === 1 ? '' : 's') + ' committed.');
+  reportState('After apply');
+  const a = AUD.audit(S);
+  logLine(a.clean ? 'ok' : 'bad', a.clean ? 'Post-apply audit clean' : 'Post-apply audit FAILED',
+    a.performed.toLocaleString() + ' independent checks. ' +
+    (a.clean ? 'No hard constraint broken.' : a.failures.length + ' failures — open AUDIT.'));
+  toast(a.clean ? 'ok' : 'bad', 'Plan applied', n + ' changes committed and re-verified against ' +
+    a.performed.toLocaleString() + ' constraint checks.');
+}
+function clearProposal() { S.proposal = null; $('#proposal').classList.add('hidden'); }
+
+/* ================= disruptions ================= */
+function inject(kind) {
+  push();
+  let e = null;
+  if (kind === 'flight') e = SIM.flightDelay(S, 45);
+  else if (kind === 'breakdown') e = SIM.breakdown(S);
+  else if (kind === 'callout') e = SIM.callout(S);
+  else if (kind === 'traffic') e = SIM.trafficSurge(S, 1.25);
+  else if (kind === 'reservation') e = SIM.lastMinute(S, 1);
+  else if (kind === 'surge') e = SIM.airportSurge(S);
+  else if (kind === 'chaos') e = SIM.chaos(S);
+
+  if (!e) { S.history.pop(); toast('warn', 'Nothing to disrupt', 'No eligible target left for that event on this day.'); return; }
+  M.index(S);
+  clearProposal();
+  render();
+  logLine('bad', e.title, e.detail);
+  reportState('Impact');
+  toast(kind === 'chaos' ? 'bad' : 'warn', e.title, e.detail);
+  if (S.autoOpt) setTimeout(() => runOptimize(e.title.toLowerCase()), 500);
+}
+
+/* ================= drag & drop ================= */
+let dragId = null;
+function onDragStart(e) {
+  const host = e.currentTarget;      /* e.target may be one of the prism faces */
+  dragId = host.dataset.t;
+  e.dataTransfer.setData('text/plain', dragId);
+  e.dataTransfer.effectAllowed = 'move';
+  /* Browsers snapshot the dragged element, and a rotated prism photographs
+     badly. Hand them a flat stand-in instead. */
+  const face = host.querySelector('.face');
+  const ghost = el('div', 'dragghost', face ? face.innerHTML : '');
+  ghost.style.width = host.offsetWidth + 'px';
+  ghost.style.height = host.offsetHeight + 'px';
+  ghost.style.background = getComputedStyle(host).getPropertyValue('--bar');
+  ghost.style.color = getComputedStyle(host).getPropertyValue('--barink');
+  document.body.appendChild(ghost);
+  try { e.dataTransfer.setDragImage(ghost, 12, 12); } catch (err) {}
+  setTimeout(() => ghost.remove(), 0);
+}
+function onDragOver(e) {
+  if (!dragId) return;
+  e.preventDefault();
+  const row = e.currentTarget;
+  const vid = row.dataset.v;
+  const ok = quickCheck(dragId, vid).length === 0;
+  row.classList.toggle('drop', ok);
+  row.classList.toggle('nodrop', !ok);
+  e.dataTransfer.dropEffect = 'move';
+}
+/* the same predicate the optimizer uses, so the hover colour cannot lie */
+function quickCheck(tripId, vid) {
+  const t = S.tById[tripId];
+  const plan = M.clonePlan(S.plan);
+  plan.assign[tripId] = vid;
+  const ws = O.workState(S, plan); M.index(ws); ws.plan = plan;
+  return M.staticViolations(ws, t, vid, M.project(ws));
+}
+function onDrop(e) {
+  e.preventDefault();
+  const row = e.currentTarget;
+  row.classList.remove('drop', 'nodrop');
+  const vid = row.dataset.v, tid = dragId; dragId = null;
+  if (!tid || S.plan.assign[tid] === vid) return;
+  const t = S.tById[tid];
+  if (t.locked) { toast('bad', 'Assignment locked', t.ref + ' is locked to ' + S.vById[t.lockedTo].label + '. Unlock it first.'); return; }
+  if (M.committed(S, t)) {
+    toast('bad', 'Trip already under way',
+      t.ref + ' started at ' + H.hhmm(t.startedAt) + ' on ' + S.vById[t.startedOn].label +
+      '. Harmony cannot move a car that already has the client aboard.');
+    return;
+  }
+
+  const v = quickCheck(tid, vid);
+  if (!v.length) {
+    push();
+    S.plan.assign[tid] = vid;
+    clearProposal(); render();
+    const l = S.lastProj.leg[tid];
+    logLine('ok', 'Manual reassignment accepted',
+      t.ref + ' ' + t.paxName + ' → ' + S.vById[vid].label + '. Projected ' + H.hhmm(l.start) +
+      (l.late > 0.5 ? ', ' + Math.round(l.late) + ' min late' : ', on time') + '. ' +
+      'Downstream trips on that car re-timed.');
+    reportState('After manual move');
+    toast('ok', 'Accepted', t.ref + ' moved to ' + S.vById[vid].label + '.');
+    if (S.autoOpt) setTimeout(() => runOptimize('manual move'), 400);
+    return;
+  }
+  rejectSheet(t, S.vById[vid], v);
+}
+
+function rejectSheet(t, v, viol) {
+  openSheet(
+    '<h3>Assignment rejected</h3>' +
+    '<p>' + t.ref + ' ' + t.paxName + ' onto ' + v.label + ' (' + H.CLASS_LABEL[v.cls] + ', ' +
+    v.cap + ' seats) breaks ' + viol.length + ' hard constraint' + (viol.length > 1 ? 's' : '') + '.</p>' +
+    '<div class="banner bad">' + viol.map(x => '<div><b>' + x.code + '</b> — ' +
+      (x.detail || M.CODE_TEXT[x.code]) + '</div>').join('') + '</div>' +
+    '<h4>WHAT HARMONY WOULD DO INSTEAD</h4>' + candidateHtml(t) +
+    '<div class="sheetacts">' +
+    '<button class="ghostbtn" id="ovBtn">Override anyway — show me the damage</button>' +
+    '<button class="primary" id="okBtn">Cancel</button></div>');
+  $('#okBtn').onclick = closeSheet;
+  $('#ovBtn').onclick = function () {
+    push();
+    S.plan.assign[t.id] = v.id;
+    closeSheet(); clearProposal(); render();
+    logLine('bad', 'Constraint overridden by operator',
+      t.ref + ' forced onto ' + v.label + '. ' + viol.map(x => x.detail || M.CODE_TEXT[x.code]).join('; ') +
+      '. This plan is now illegal and the audit will say so.');
+    reportState('After override');
+    toast('bad', 'Override recorded', 'The plan is now illegal. Run AUDIT — Harmony will not hide it.');
+  };
+}
+
+function candidateHtml(t) {
+  const ex = O.explainTrip(S, t.id);
+  const yes = ex.feasible.map(f =>
+    '<div class="cand yes"><span class="v">' + S.vById[f.vehicleId].label + '</span>' +
+    '<span class="d">feasible · cost +' + Math.round(f.score) + ' · ' +
+    (f.late > 0.5 ? Math.round(f.late) + ' min late' : 'on time') + ' · ' +
+    f.repoMi.toFixed(1) + ' mi deadhead · ' + Math.round(f.slack) + ' min buffer</span></div>').join('');
+  const no = ex.rejected.slice(0, 6).map(f =>
+    '<div class="cand no"><span class="v">' + S.vById[f.vehicleId].label + '</span>' +
+    '<span class="d">' + f.reasons.join('; ') + '</span></div>').join('');
+  return '<div class="rows2">' + (yes || '<div class="cand no"><span class="v">none</span><span class="d">No vehicle in the fleet can legally take this trip right now.</span></div>') + no + '</div>' +
+    '<p style="margin-top:10px;color:var(--ink3)">' + ex.stats.candidates +
+    ' pairings evaluated for this trip, ' + ex.stats.feasible + ' feasible.</p>';
+}
+
+/* ================= trip sheet ================= */
+function openTrip(id) {
+  const t = S.tById[id];
+  const proj = S.lastProj;
+  const l = proj.leg[id];
+  const vid = S.plan.assign[id];
+  const v = vid && vid !== 'AFFILIATE' ? S.vById[vid] : null;
+  const c = v ? S.cById[S.plan.crew[v.id]] : null;
+  const bad = S.lastViol.filter(x => x.trip === id);
+
+  let html = '<h3>' + t.ref + ' · ' + t.paxName + (t.vip ? ' <span style="color:var(--gold)">◆ VIP</span>' : '') + '</h3>' +
+    '<p>' + svcName(t) + ' · ' + H.LOC[t.from].name + ' → ' + H.LOC[t.to].name +
+    (t.account ? ' · ' + t.account : '') + (t.flight ? ' · ' + t.flight.code +
+      (t.flight.delayMin ? ' (delayed ' + t.flight.delayMin + ' min)' : '') : '') + '</p>' +
+    '<div class="facts">' +
+    f('BOOKED', H.hhmm(t.basePickup)) +
+    f('REQUESTED', H.hhmm(t.pickup)) +
+    f('PROJECTED', l ? H.hhmm(l.start) : '—') +
+    f('LATE BY', l ? (l.late > 0.5 ? Math.round(l.late) + ' min' : 'on time') : '—') +
+    f('PASSENGERS', t.pax + ' · needs ' + H.CLASS_LABEL[t.reqCls]) +
+    f('ASSIGNED', v ? v.label + ' (' + H.CLASS_LABEL[v.cls] + ')' : vid === 'AFFILIATE' ? 'Affiliate' : 'Unassigned') +
+    f('CHAUFFEUR', c ? c.name + ' · ' + H.TIER[c.tier] : '—') +
+    f('DEADHEAD IN', l ? l.repoMi.toFixed(1) + ' mi / ' + Math.round(l.repoMin) + ' min' : '—') +
+    '</div>';
+
+  if (bad.length) html += '<div class="banner bad">' + bad.map(x =>
+    '<div><b>' + x.code + '</b> — ' + (x.detail || M.CODE_TEXT[x.code]) + '</div>').join('') + '</div>';
+  if (t.notified) html += '<div class="banner warn">The customer has already been told who is driving. ' +
+    'Moving this trip carries a ' + (S.weights.disruption * (t.vip ? 48 : 24)) +
+    '-point disruption penalty in the objective, so Harmony will only move it for a real gain.</div>';
+
+  html += '<h4>EVERY VEHICLE, SCORED RIGHT NOW</h4>' + candidateHtml(t);
+  html += '<div class="sheetacts">' +
+    '<button class="ghostbtn" id="lockBtn">' + (t.locked ? '⌧ Unlock' : '⌧ Lock to this vehicle') + '</button>' +
+    (vid !== 'AFFILIATE' ? '<button class="ghostbtn" id="affBtn">Farm out to affiliate ($' + M.AFFILIATE_FEE + ')</button>' : '') +
+    '<button class="ghostbtn" id="delayBtn">Delay pickup 30 min</button>' +
+    '<button class="primary" id="closeB">Close</button></div>';
+
+  openSheet(html);
+  $('#closeB').onclick = closeSheet;
+  $('#lockBtn').onclick = function () {
+    push();
+    t.locked = !t.locked; t.lockedTo = t.locked ? vid : null;
+    closeSheet(); render();
+    logLine('sys', t.locked ? 'Assignment locked' : 'Lock released',
+      t.ref + (t.locked ? ' pinned to ' + (v ? v.label : 'its current state') +
+        '. The optimizer must now solve around it.' : ' is movable again.'));
+  };
+  const ab = $('#affBtn');
+  if (ab) ab.onclick = function () {
+    push(); S.plan.assign[id] = 'AFFILIATE'; t.affiliate = true;
+    closeSheet(); clearProposal(); render();
+    logLine('warn', 'Farmed to affiliate', t.ref + ' released to an affiliate at $' + M.AFFILIATE_FEE + '.');
+    reportState('After farm-out');
+  };
+  $('#delayBtn').onclick = function () {
+    push(); t.pickup += 30;
+    closeSheet(); clearProposal(); M.index(S); render();
+    logLine('warn', 'Pickup moved', t.ref + ' now requested at ' + H.hhmm(t.pickup) + '.');
+    reportState('After pickup change');
+  };
+}
+function f(k, v) { return '<div><span>' + k + '</span><b>' + v + '</b></div>'; }
+
+/* ================= audit ================= */
+function runAudit() {
+  const a = AUD.audit(S);
+  let html = '<h3>Independent plan audit</h3>' +
+    '<p>This check does not ask the optimizer whether it did well. It walks the plan that ' +
+    'currently exists and re-derives every hard constraint from the world — including the ones ' +
+    'the scheduler believes it guarantees by construction.</p>' +
+    '<div class="banner ' + (a.clean ? 'ok' : 'bad') + '">' +
+    (a.clean
+      ? '✓ PASS — ' + a.performed.toLocaleString() + ' checks performed, no hard constraint broken.'
+      : '✕ FAIL — ' + a.failures.length + ' of ' + a.performed.toLocaleString() +
+        ' checks failed. The plan on screen is not legally executable.') + '</div>' +
+    '<h4>CHECKS PERFORMED</h4><div class="rows2">' +
+    a.checks.map(c => '<div class="rw ' + (c.failed ? 'fail' : 'pass') + '"><span class="tick">' +
+      (c.failed ? '✕' : '✓') + '</span><span class="l">' + c.name + '</span><span class="r">' +
+      c.n.toLocaleString() + ' checked' + (c.failed ? ' · ' + c.failed + ' FAILED' : '') +
+      '</span></div>').join('') + '</div>';
+
+  if (a.failures.length) html += '<h4>FAILURES</h4><div class="rows2">' +
+    a.failures.map(x => '<div class="rw fail"><span class="tick">✕</span><span class="l">' +
+      x.detail + '</span><span class="r">' + x.check + '</span></div>').join('') + '</div>';
+
+  html += '<h4>SERVICE QUALITY — REPORTED, NOT ASSERTED</h4>' +
+    '<p>Lateness is not a constraint violation. A legal plan can still be a bad day, and Harmony ' +
+    'shows both numbers separately rather than folding them together.</p>' +
+    '<div class="facts c3">' +
+    f('LATE OVER ' + M.LATE_THRESHOLD + ' MIN', a.service.late) +
+    f('OVER ' + M.SERVICE_FAIL + ' MIN', a.service.failed) +
+    f('UNASSIGNED', a.service.unassigned) +
+    f('AFFILIATE', a.service.affiliate) +
+    f('DEADHEAD', Math.round(a.proj.totals.deadheadMi) + ' mi') +
+    f('OVERTIME', Math.round(a.proj.totals.overtimeMin) + ' min') + '</div>' +
+    '<div class="sheetacts"><button class="primary" id="closeB">Close</button></div>';
+
+  openSheet(html);
+  $('#closeB').onclick = closeSheet;
+  logLine(a.clean ? 'ok' : 'bad', a.clean ? 'Audit passed' : 'Audit FAILED',
+    a.performed.toLocaleString() + ' independent checks across ' + a.checks.length + ' constraint families. ' +
+    (a.clean ? 'No violations.' : a.failures.length + ' failures.'));
+}
+
+/* ================= sheet & toast ================= */
+function openSheet(html) { $('#sheetBody').innerHTML = html; $('#sheet').hidden = false; }
+function closeSheet() { $('#sheet').hidden = true; }
+let toastTimer;
+function toast(kind, title, text) {
+  const t = $('#toast');
+  t.className = 'toast on ' + (kind === 'ok' ? '' : kind);
+  t.innerHTML = '<b>' + title + '</b><p>' + text + '</p>';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('on'), 4600);
+}
+
+/* ================= clock ================= */
+/* Commit elapsed time to history. A trip the clock has passed the start of is
+   under way and can no longer be reassigned; one whose end has passed keeps the
+   times it actually ran, so raising traffic this afternoon cannot retroactively
+   make this morning late. */
+function freezeElapsed() {
+  const proj = M.project(S);
+  let changed = false;
+  S.day.trips.forEach(function (t) {
+    const vid = S.plan.assign[t.id];
+    if (!vid || vid === 'AFFILIATE') return;
+    const l = proj.leg[t.id]; if (!l) return;
+    if (t.startedAt == null && S.clock >= l.start) {
+      t.startedAt = l.start; t.startedOn = vid; changed = true;
+    }
+    if (!t.actual && t.startedAt != null && S.clock >= l.end) {
+      t.actual = { v: vid, start: l.start, end: l.end, late: l.late,
+                   repoMi: l.repoMi, repoMin: l.repoMin, dur: l.dur };
+      changed = true;
+    }
+  });
+  return changed;
+}
+
+/* Cheap signature of the whole board's lifecycle, so the clock only forces a
+   re-render when something actually changed state. */
+function statusSig(proj) {
+  let out = '';
+  for (let i = 0; i < S.day.trips.length; i++) out += proj.status[S.day.trips[i].id].charAt(0);
+  return out;
+}
+
+function tick(sp) {
+  S.clock = Math.min(1440, S.clock + sp / 4);
+  $('#clock').textContent = H.hhmm24(S.clock);
+  const froze = freezeElapsed();
+  const proj = M.project(S);
+  const sig = statusSig(proj);
+  if (froze || sig !== S.lastSig) { S.lastSig = sig; render(); }
+  else positionNow();
+  if (S.clock >= 1440) { setSpeed(0); logLine('sys', 'Day complete', 'Simulation reached midnight.'); }
+}
+
+function setSpeed(sp) {
+  S.speed = sp;
+  document.querySelectorAll('#speeds button').forEach(b => b.classList.toggle('on', +b.dataset.sp === sp));
+  clearInterval(S.timer);
+  if (!sp) return;
+  S.timer = setInterval(() => tick(sp), 250);
+}
+
+/* ================= wiring ================= */
+function wire() {
+  $('#optBtn').onclick = () => runOptimize();
+  $('#applyBtn').onclick = applyProposal;
+  $('#discardBtn').onclick = function () {
+    clearProposal(); render();
+    logLine('sys', 'Proposal discarded', 'The plan is unchanged.');
+  };
+  $('#auditBtn').onclick = runAudit;
+  $('#resetBtn').onclick = () => { loadDay(S.dayCfg.id); toast('ok', 'Day restored', S.dayCfg.name + ' rebuilt from scratch. Nothing you did persists.'); };
+  $('#undoBtn').onclick = function () {
+    if (!S.history.length) return;
+    restore(S.history.pop());
+    $('#undoBtn').disabled = !S.history.length;
+    clearProposal(); render();
+    logLine('sys', 'Undone', 'Reverted to the previous state.');
+  };
+  document.querySelectorAll('[data-ev]').forEach(b => b.onclick = () => inject(b.dataset.ev));
+  document.querySelectorAll('#speeds button').forEach(b => b.onclick = () => setSpeed(+b.dataset.sp));
+  $('#fProblems').onchange = e => { S.problemsOnly = e.target.checked; render(); };
+  $('#autoOpt').onchange = e => { S.autoOpt = e.target.checked; };
+  $('#setupBtn').onclick = e => { e.stopPropagation(); $('#setup').hidden ? openSetup() : closeSetup(); };
+  document.addEventListener('click', function (e) {
+    const n = $('#setup');
+    if (!n.hidden && !n.contains(e.target) && e.target.id !== 'setupBtn') closeSetup();
+  });
+  $('#sheetClose').onclick = closeSheet;
+  $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeSheet();
+    if (e.key === 'o' && !e.metaKey && !e.ctrlKey) runOptimize();
+    if (e.key === 'a' && !e.metaKey && !e.ctrlKey) runAudit();
+  });
+  document.addEventListener('dragend', () =>
+    document.querySelectorAll('.vrow').forEach(r => r.classList.remove('drop', 'nodrop')));
+
+  /* Wheel over a trip turns the whole board's prisms, free-angle, so it can be
+     parked between two faces. Anywhere else the wheel still scrolls the board -
+     taking that away on a thirty-row grid would be a bad trade. */
+  $('#gridwrap').addEventListener('wheel', function (e) {
+    const bar = e.target.closest && e.target.closest('.trip');
+    if (!bar) return;
+    e.preventDefault();
+    if (S.overlayAuto) { S.overlayAuto = false; clearInterval(S.autoTimer); S.autoTimer = null; }
+    S.angle += e.deltaY * WHEEL_DEG;
+    applyRotation(false);
+  }, { passive: false });
+}
+
+let booted = false;
+function once() { if (booted) return; booted = true; boot(); }
+document.addEventListener('DOMContentLoaded', once);
+if (document.readyState !== 'loading') once();
+})(window);
+
+</script>
+</body>
+</html>

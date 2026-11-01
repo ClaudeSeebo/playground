@@ -9,39 +9,65 @@
 @media (prefers-color-scheme:dark){:root{--bg:#16181b;--panel:#1f2226;--ink:#e8e6e3;--muted:#9aa1a9;--line:#33373c;--accent:#7cb2ff;--error:#ffb4ab}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
-main{max-width:1080px;margin:0 auto;padding:24px 16px 40px}
-h1{font-size:22px;margin:0}
-header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:16px}
+main{max-width:1280px;height:100vh;height:100dvh;margin:0 auto;padding:12px 16px;display:flex;flex-direction:column}
+#app{flex:1;min-height:0;display:flex;flex-direction:column}
+h1{font-size:20px;margin:0}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:8px}
 label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
 input,select,button{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:7px 9px}
 button{cursor:pointer}
 button:disabled{opacity:.5;cursor:default}
 button.link{border:0;background:none;color:var(--accent);padding:0}
-.filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:12px;margin-bottom:12px}
-.status{color:var(--muted);margin-bottom:8px;min-height:22px}
-.wrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:8px 12px;margin-bottom:8px}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;margin-bottom:8px}
+.scrollers{display:inline-flex;gap:6px}
+.check{flex-direction:row;align-items:center;gap:6px}
+.check input{width:auto}
+.views{margin-left:auto}
+.views,.seg{display:inline-flex}
+.views button,.seg button{border-radius:0;font-size:13px;padding:5px 9px}
+.views button:first-child,.seg button:first-child{border-radius:6px 0 0 6px}
+.views button:last-child,.seg button:last-child{border-radius:0 6px 6px 0;border-left:0}
+.views button[aria-pressed=true],.seg button[aria-pressed=true]{background:var(--accent);color:var(--panel);border-color:var(--accent)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 12px;margin-bottom:8px}
+.panel summary{cursor:pointer;font-size:13px}
+.collist{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 16px;margin-top:10px;max-height:30vh;overflow:auto}
+.colrow{display:flex;align-items:center;gap:6px;font-size:13px}
+.colrow span{flex:1}
+.colrow button{padding:0 6px}
+.status{color:var(--muted);margin-bottom:4px;min-height:22px}
+.status.bad{color:var(--error)}
+.wrap{flex:1;min-height:0;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:8px}
 table{border-collapse:collapse;width:100%}
-th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+table.fixed{table-layout:fixed}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}
 tbody tr:last-child td{border-bottom:0}
-th button{border:0;background:none;padding:0;font-weight:600}
-td.num,th.num{text-align:right;white-space:nowrap}
+th{position:sticky;top:0;z-index:1;background:var(--panel);box-shadow:inset 0 -1px 0 var(--line);white-space:nowrap;overflow:hidden}
+th[draggable=true]{cursor:grab}
+th.over{box-shadow:inset 3px 0 0 var(--accent)}
+th button{border:0;background:none;padding:0;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+th .static{font-weight:600}
+.resize{position:absolute;top:0;right:0;bottom:0;width:8px;cursor:col-resize;touch-action:none}
+.resize:hover{background:var(--line)}
+td.num,th.num{text-align:right}
 td a{color:var(--accent);text-decoration:none}
 td a:hover{text-decoration:underline}
+td input[type=number]{width:64px;padding:3px 5px}
+td input.bad{border-color:var(--error)}
+.clamp{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;overflow:hidden}
 .sub{color:var(--muted);font-size:13px}
-.pager{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:12px}
+details.more{margin-top:4px}
+details.more summary{cursor:pointer;color:var(--accent);font-size:13px}
+details.more p{margin:6px 0 0;font-size:13px}
+.pager{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:8px}
 .signin{max-width:340px;margin:12vh auto 0;display:grid;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:20px}
 .error{color:var(--error)}
-footer{margin-top:20px;color:var(--muted);font-size:13px}
-footer p{margin:4px 0}
+footer{margin-top:auto;padding-top:6px;color:var(--muted);font-size:12px;display:flex;flex-wrap:wrap;gap:0 14px}
+footer p{margin:0}
 .tmdb img{vertical-align:baseline;margin-right:4px}
-.check{flex-direction:row;align-items:center;gap:6px;margin-bottom:12px}
-.check input{width:auto}
-details{margin-top:4px}
-summary{cursor:pointer;color:var(--accent);font-size:13px}
-details p{margin:6px 0 0;font-size:13px}
-.lead{margin:4px 0 0;font-size:13px}
 [hidden]{display:none!important}
-@media (max-width:640px){.filters{grid-template-columns:1fr 1fr}.filters .wide{grid-column:1/-1}}
+@media (max-width:640px){.filters{grid-template-columns:1fr 1fr}.filters .wide{grid-column:1/-1}.views{margin-left:0}}
+@media (max-height:600px){main{height:auto}.wrap{flex:none;height:80vh}}
 </style>
 </head>
 <body>
@@ -65,20 +91,34 @@ details p{margin:6px 0 0;font-size:13px}
       <label>Minimum rating <input id="minRating" type="number" min="5" max="10" step="0.1" value="5"></label>
       <label>Minimum votes <input id="minVotes" type="number" min="100" step="100" value="100"></label>
     </div>
-    <label class="check"><input id="streaming" type="checkbox"> Only films included with a US streaming service</label>
-    <div id="status" class="status" role="status"></div>
-    <div class="wrap">
-      <table>
-        <thead><tr>
-          <th><button data-sort="title" type="button">Title</button></th>
-          <th>Genres</th>
-          <th class="num"><button data-sort="runtime_minutes" type="button">Runtime</button></th>
-          <th class="num"><button data-sort="rating" type="button">Rating</button></th>
-          <th class="num"><button data-sort="votes" type="button">Votes</button></th>
-        </tr></thead>
-        <tbody id="rows"></tbody>
-      </table>
+    <div class="bar">
+      <label class="check"><input id="streaming" type="checkbox"> On a US streaming service</label>
+      <label class="check"><input id="onlyWatch" type="checkbox"> My watch list</label>
+      <label class="check"><input id="onlyRated" type="checkbox"> Rated by me</label>
+      <div class="seg" role="group" aria-label="Not interested films">
+        <button id="hideNot" type="button">Hide not interested</button>
+        <button id="showNot" type="button">Show not interested</button>
+      </div>
+      <div class="seg" role="group" aria-label="My rated films">
+        <button id="hideRated" type="button">Hide my rated films</button>
+        <button id="showRated" type="button">Show my rated films</button>
+      </div>
+      <div class="scrollers" role="group" aria-label="Scroll the table sideways">
+        <button id="scrollLeft" type="button">◀ Left</button>
+        <button id="scrollRight" type="button">Right ▶</button>
+      </div>
+      <div class="views" role="group" aria-label="View">
+        <button id="viewTable" type="button">Columns</button>
+        <button id="viewDetailed" type="button">Detailed</button>
+      </div>
     </div>
+    <details id="colPanel" class="panel">
+      <summary>Choose and arrange columns</summary>
+      <div id="colList" class="collist"></div>
+      <p><button id="resetLayout" class="link" type="button">Reset columns</button></p>
+    </details>
+    <div id="status" class="status" role="status"></div>
+    <div id="wrap" class="wrap"><table id="grid"><colgroup id="cols"></colgroup><thead id="head"></thead><tbody id="rows"></tbody></table></div>
     <div class="pager">
       <button id="prev" type="button">Previous</button>
       <span id="page"></span>
@@ -98,12 +138,17 @@ details p{margin:6px 0 0;font-size:13px}
 const SUPABASE_URL = "https://szvlvfgslymhlgdsjzyd.supabase.co";
 const SUPABASE_KEY = "sb_publishable_oEhQnbZ6uyM3Mr1mWp7Z1Q_exCnRIfm";
 const AUTH_URL     = SUPABASE_URL + "/auth/v1";
-const TABLE_URL    = SUPABASE_URL + "/rest/v1/movies_imdb_titles";
+const REST_URL     = SUPABASE_URL + "/rest/v1/";
 const SESSION_KEY  = "cct.movies.session";   // separate from the register's own
+const LAYOUT_KEY   = "cct.movies.layout.v1";
 const PAGE_SIZE    = 50;
+const TMDB = "movies_tmdb_details";
+const MINE = "movies_my_list";
+const BROWSE = "movies_browse";   // films with my list flattened on, so hiding covers films with no list row
+const TMDB_FIELDS = "release_date,original_language,spoken_languages,overview,keywords,collection,tmdb_rating,tmdb_votes,budget,revenue,studios,countries,streaming_us";
 
 const $ = s => document.querySelector(s);
-let SESSION = null, SORT = { col:"votes", desc:true }, OFFSET = 0, TOTAL = 0, RUN = 0, TIMER = null;
+let SESSION = null, SORT = { col:"votes", desc:true }, OFFSET = 0, TOTAL = 0, RUN = 0, TIMER = null, ROWS = [];
 
 /* ---------- auth: same shape as the register app, deliberately ---------- */
 const store = {
@@ -139,16 +184,185 @@ async function refreshSession(){
   fromAuth(await r.json());
   return true;
 }
-async function api(query, headers){
+async function api(path, opts){
+  opts = opts || {};
   if(SESSION && Date.now() > SESSION.expires_at - 60000) await refreshSession();
-  const send = () => fetch(TABLE_URL + query, { headers: Object.assign({
-    apikey: SUPABASE_KEY, Authorization: "Bearer " + (SESSION && SESSION.access_token) }, headers || {}) });
+  const send = () => fetch(REST_URL + path, { method: opts.method || "GET", body: opts.body, headers: Object.assign({
+    apikey: SUPABASE_KEY, Authorization: "Bearer " + (SESSION && SESSION.access_token) }, opts.headers || {}) });
   let r = await send();
   if(r.status === 401 && await refreshSession()) r = await send();
   if(r.status === 401){ saveSession(null); showSignIn("Please sign in again."); throw new Error("signed out"); }
   if(!r.ok) throw new Error("The database refused the request (" + r.status + ").");
   return r;
 }
+
+/* ---------- helpers ---------- */
+const list = a => a && a.length ? a.join(", ") : "";
+const money = n => n ? "$" + Number(n).toLocaleString() : "";
+const count = n => n === null || n === undefined ? "" : Number(n).toLocaleString();
+const tm = m => m[TMDB] || {};
+const st = m => tm(m).streaming_us || {};
+const people = (m, cats) => [...new Set((m.principals || []).filter(p => cats.includes(p.category)).map(p => p.name))];
+const CAST = ["actor", "actress", "self"];
+const crew = m => [...new Set((m.principals || []).filter(p => !CAST.includes(p.category))
+  .map(p => p.name + " (" + p.category.replace(/_/g, " ") + ")"))];
+function setStatus(text, bad){
+  $("#status").textContent = text;
+  $("#status").classList.toggle("bad", !!bad);
+}
+
+/* ---------- my list: the one table this page writes to ---------- */
+async function saveMine(m, patch){
+  const next = Object.assign({ on_watchlist:m.on_watchlist, not_interested:m.not_interested, my_rating:m.my_rating }, patch);
+  await api(MINE + "?on_conflict=tconst", { method:"POST",
+    headers:{ "Content-Type":"application/json", Prefer:"resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify(Object.assign({ tconst:m.tconst, updated_at:new Date().toISOString() }, next)) });
+  Object.assign(m, next);
+}
+function flagBox(m, field, label, after){
+  const c = document.createElement("input");
+  c.type = "checkbox";
+  c.checked = !!m[field];
+  c.setAttribute("aria-label", label + ": " + m.title);
+  c.addEventListener("change", async () => {
+    try{ await saveMine(m, { [field]:c.checked }); setStatus("Saved."); if(after) after(c.checked); }
+    catch(e){ c.checked = !c.checked; if(e.message !== "signed out") setStatus("Not saved. " + e.message, true); }
+  });
+  return c;
+}
+const watchBox = m => flagBox(m, "on_watchlist", "On my watch list");
+/* Marking a film while they're hidden takes it out at once: that's the point of the mark. */
+const notBox = m => flagBox(m, "not_interested", "Not interested", on => { if(on && LAYOUT.hideNot) load(); });
+function ratingBox(m){
+  const i = document.createElement("input");
+  i.type = "number"; i.min = 1; i.max = 10; i.step = 1;
+  i.value = m.my_rating || "";
+  i.setAttribute("aria-label", "My rating: " + m.title);
+  i.addEventListener("change", async () => {
+    const old = m.my_rating || "";
+    const raw = i.value.trim(), n = Number(raw);
+    if(raw !== "" && (!Number.isInteger(n) || n < 1 || n > 10)){
+      i.classList.add("bad");
+      setStatus("Ratings are whole numbers from 1 to 10. Not saved.", true);
+      return;
+    }
+    i.classList.remove("bad");
+    try{ await saveMine(m, { my_rating: raw === "" ? null : n }); setStatus("Saved."); }
+    catch(e){ i.value = old; if(e.message !== "signed out") setStatus("Not saved. " + e.message, true); }
+  });
+  return i;
+}
+function titleLink(m){
+  const a = document.createElement("a");
+  a.href = "https://www.imdb.com/title/" + encodeURIComponent(m.tconst) + "/";
+  a.target = "_blank"; a.rel = "noopener";
+  a.textContent = m.title;
+  return a;
+}
+
+/* ---------- every field, in its own column ---------- */
+const COLUMNS = [
+  { id:"watch",    label:"Watch list",     w:80,  node:watchBox, sort:"on_watchlist" },
+  { id:"notint",   label:"Not interested", w:90,  node:notBox, sort:"not_interested" },
+  { id:"mine",     label:"My rating",      w:90,  node:ratingBox, sort:"my_rating" },
+  { id:"title",    label:"Title",          w:230, node:titleLink, sort:"title", asc:true },
+  { id:"original", label:"Original title", w:180, text:m => m.original_title, sort:"original_title", asc:true },
+  { id:"year",     label:"Year",           w:70,  text:m => m.year, sort:"year", num:true },
+  { id:"released", label:"Released",       w:110, text:m => tm(m).release_date, sort:TMDB + "(release_date)" },
+  { id:"runtime",  label:"Runtime",        w:90,  text:m => m.runtime_minutes ? m.runtime_minutes + " min" : "", sort:"runtime_minutes", num:true },
+  { id:"genres",   label:"Genres",         w:160, text:m => list(m.genres) },
+  { id:"rating",   label:"IMDb rating",    w:100, text:m => Number(m.rating).toFixed(1), sort:"rating", num:true },
+  { id:"votes",    label:"IMDb votes",     w:100, text:m => count(m.votes), sort:"votes", num:true },
+  { id:"tscore",   label:"TMDB score",     w:100, text:m => tm(m).tmdb_votes ? Number(tm(m).tmdb_rating).toFixed(1) : "", sort:TMDB + "(tmdb_rating)", num:true },
+  { id:"tvotes",   label:"TMDB votes",     w:100, text:m => count(tm(m).tmdb_votes), sort:TMDB + "(tmdb_votes)", num:true },
+  { id:"director", label:"Director",       w:170, text:m => list(m.directors) },
+  { id:"writer",   label:"Writer",         w:170, text:m => list(m.writers) },
+  { id:"cast",     label:"Cast",           w:220, text:m => list(people(m, CAST)) },
+  { id:"crew",     label:"Other crew",     w:220, text:m => list(crew(m)) },
+  { id:"stream",   label:"Streaming (US)", w:180, text:m => list(st(m).flatrate) },
+  { id:"ads",      label:"With ads (US)",  w:160, text:m => list(st(m).ads) },
+  { id:"rent",     label:"Rent (US)",      w:160, text:m => list(st(m).rent) },
+  { id:"buy",      label:"Buy (US)",       w:160, text:m => list(st(m).buy) },
+  { id:"language", label:"Original language", w:130, text:m => tm(m).original_language, sort:TMDB + "(original_language)", asc:true },
+  { id:"spoken",   label:"Languages",      w:150, text:m => list(tm(m).spoken_languages) },
+  { id:"plot",     label:"Plot",           w:320, text:m => tm(m).overview },
+  { id:"keywords", label:"Keywords",       w:220, text:m => list(tm(m).keywords) },
+  { id:"series",   label:"Series",         w:170, text:m => tm(m).collection, sort:TMDB + "(collection)", asc:true },
+  { id:"budget",   label:"Budget",         w:120, text:m => money(tm(m).budget), sort:TMDB + "(budget)", num:true },
+  { id:"revenue",  label:"Revenue",        w:120, text:m => money(tm(m).revenue), sort:TMDB + "(revenue)", num:true },
+  { id:"studios",  label:"Studios",        w:200, text:m => list(tm(m).studios) },
+  { id:"countries",label:"Countries",      w:150, text:m => list(tm(m).countries) },
+  { id:"imdbid",   label:"IMDb id",        w:110, text:m => m.tconst, sort:"tconst", asc:true }
+];
+const BY_ID = Object.fromEntries(COLUMNS.map(c => [c.id, c]));
+function freshLayout(){ return { view:"table", order:COLUMNS.map(c => c.id), widths:{}, hidden:[], hideNot:true, hideRated:false }; }
+function loadLayout(){
+  let l = null;
+  try{ l = JSON.parse(store.get(LAYOUT_KEY) || "null"); }catch(e){ l = null; }
+  const base = freshLayout();
+  if(!l) return base;
+  const order = (l.order || []).filter(id => BY_ID[id]);
+  COLUMNS.forEach((c, i) => { if(!order.includes(c.id)) order.splice(i, 0, c.id); });
+  return { view: l.view === "detailed" ? "detailed" : "table", order, widths: l.widths || {},
+           hidden: (l.hidden || []).filter(id => BY_ID[id]),
+           hideNot: l.hideNot !== false, hideRated: !!l.hideRated };
+}
+let LAYOUT = loadLayout();
+const saveLayout = () => store.set(LAYOUT_KEY, JSON.stringify(LAYOUT));
+const visible = () => LAYOUT.order.filter(id => !LAYOUT.hidden.includes(id)).map(id => BY_ID[id]);
+const widthOf = c => LAYOUT.widths[c.id] || c.w;
+
+/* The detailed view: what the page showed before columns, plus the two controls. */
+function detailCell(m){
+  const box = document.createElement("div");
+  const add = (label, value) => {
+    if(!value) return;
+    const s = document.createElement("div");
+    s.className = "sub"; s.textContent = label ? label + ": " + value : value;
+    box.append(s);
+  };
+  box.append(titleLink(m));
+  if(m.original_title && m.original_title !== m.title) add("", m.original_title);
+  add("Director", list(m.directors));
+  add("Writer", list(m.writers));
+  add("Cast", list(people(m, CAST).slice(0, 5)));
+  const d = m[TMDB];
+  if(d){
+    const s = st(m);
+    add("Released", d.release_date);
+    add("Streaming (US)", list([...(s.flatrate || []), ...(s.ads || [])]));
+    add("Languages", list(d.spoken_languages) || d.original_language);
+    const more = document.createElement("details");
+    more.className = "more";
+    const label = document.createElement("summary");
+    label.textContent = "More";
+    more.append(label);
+    const p = (name, value) => {
+      if(!value) return;
+      const e = document.createElement("p");
+      e.textContent = name ? name + ": " + value : value;
+      more.append(e);
+    };
+    p("", d.overview);
+    p("Original language", d.original_language);
+    p("Rent (US)", list(s.rent));
+    p("Buy (US)", list(s.buy));
+    p("Series", d.collection);
+    p("Keywords", list(d.keywords));
+    p("TMDB score", d.tmdb_votes ? Number(d.tmdb_rating).toFixed(1) + " from " + count(d.tmdb_votes) + " votes" : "");
+    p("Budget", money(d.budget));
+    p("Revenue", money(d.revenue));
+    p("Studios", list(d.studios));
+    p("Countries", list(d.countries));
+    box.append(more);
+  }
+  return box;
+}
+const DETAILED = [
+  BY_ID.watch, BY_ID.notint, BY_ID.mine,
+  { id:"detail", label:"Title", node:detailCell, sort:"title", asc:true },
+  BY_ID.genres, BY_ID.runtime, BY_ID.rating, BY_ID.votes
+];
 
 /* ---------- data ---------- */
 function filterQuery(){
@@ -161,31 +375,37 @@ function filterQuery(){
   if(genre) p.push("genres=cs." + encodeURIComponent('{"' + genre + '"}'));
   if(!isNaN(minRating)) p.push("rating=gte." + minRating);
   if(!isNaN(minVotes)) p.push("votes=gte." + minVotes);
-  if($("#streaming").checked) p.push("movies_tmdb_details.streaming_us->flatrate=not.is.null");
+  if($("#streaming").checked) p.push(TMDB + ".streaming_us->flatrate=not.is.null");
+  if($("#onlyWatch").checked) p.push("on_watchlist=is.true");
+  if(LAYOUT.hideNot) p.push("not_interested=is.false");
+  /* "Rated by me" asks for exactly what the hide switch would remove, so it wins. */
+  if($("#onlyRated").checked) p.push("my_rating=not.is.null");
+  else if(LAYOUT.hideRated) p.push("my_rating=is.null");
   return p;
 }
 async function load(){
   const run = ++RUN;
-  $("#status").textContent = "Loading…";
-  const embed = "movies_tmdb_details" + ($("#streaming").checked ? "!inner" : "") +
-    "(release_date,original_language,spoken_languages,overview,keywords,collection,tmdb_rating,tmdb_votes,budget,revenue,studios,countries,streaming_us)";
-  const q = ["select=tconst,title,original_title,runtime_minutes,genres,rating,votes,directors,writers,principals," + embed].concat(filterQuery());
+  setStatus("Loading…");
+  const select = "select=tconst,title,original_title,year,runtime_minutes,genres,rating,votes,directors,writers,principals,on_watchlist,not_interested,my_rating," +
+    TMDB + ($("#streaming").checked ? "!inner" : "") + "(" + TMDB_FIELDS + ")";
+  const q = [select].concat(filterQuery());
   q.push("order=" + SORT.col + "." + (SORT.desc ? "desc" : "asc") + ".nullslast,tconst.asc");
   q.push("limit=" + PAGE_SIZE, "offset=" + OFFSET);
   try{
-    const r = await api("?" + q.join("&"), { Prefer:"count=exact" });
+    const r = await api(BROWSE + "?" + q.join("&"), { headers:{ Prefer:"count=exact" } });
     const rows = await r.json();
     if(run !== RUN) return;
     TOTAL = parseInt((r.headers.get("content-range") || "").split("/")[1], 10) || 0;
-    render(rows);
+    ROWS = rows;
+    render();
   }catch(e){
-    if(run === RUN && e.message !== "signed out") $("#status").textContent = e.message;
+    if(run === RUN && e.message !== "signed out") setStatus(e.message, true);
   }
 }
 async function loadGenres(){
   const seen = new Set();
   for(let from = 0; ; from += 1000){
-    const r = await api("?select=genres&order=tconst.asc&limit=1000&offset=" + from);
+    const r = await api("movies_imdb_titles?select=genres&order=tconst.asc&limit=1000&offset=" + from);
     const rows = await r.json();
     rows.forEach(m => (m.genres || []).forEach(g => seen.add(g)));
     if(rows.length < 1000) break;
@@ -194,89 +414,184 @@ async function loadGenres(){
 }
 
 /* ---------- render: titles are data, so textContent, never innerHTML ---------- */
-function cell(row, text, cls){
-  const td = row.insertCell();
-  td.textContent = text;
-  if(cls) td.className = cls;
-  return td;
+function headCell(c, table){
+  const th = document.createElement("th");
+  if(c.num) th.className = "num";
+  th.dataset.col = c.id;
+  if(c.sort){
+    const b = document.createElement("button");
+    b.type = "button";
+    const on = SORT.col === c.sort;
+    b.textContent = c.label + (on ? (SORT.desc ? " ▼" : " ▲") : "");
+    th.setAttribute("aria-sort", on ? (SORT.desc ? "descending" : "ascending") : "none");
+    b.addEventListener("click", () => {
+      SORT = SORT.col === c.sort ? { col:c.sort, desc:!SORT.desc } : { col:c.sort, desc:!c.asc };
+      OFFSET = 0;
+      load();
+    });
+    th.append(b);
+  }else{
+    const s = document.createElement("span");
+    s.className = "static"; s.textContent = c.label;
+    th.append(s);
+  }
+  if(table){
+    th.draggable = true;
+    th.addEventListener("dragstart", e => { e.dataTransfer.setData("text/plain", c.id); e.dataTransfer.effectAllowed = "move"; });
+    th.addEventListener("dragover", e => { e.preventDefault(); th.classList.add("over"); });
+    th.addEventListener("dragleave", () => th.classList.remove("over"));
+    th.addEventListener("drop", e => {
+      e.preventDefault();
+      th.classList.remove("over");
+      moveBefore(e.dataTransfer.getData("text/plain"), c.id);
+    });
+    const h = document.createElement("span");
+    h.className = "resize";
+    h.title = "Drag to resize";
+    h.addEventListener("pointerdown", e => startResize(e, c));
+    h.addEventListener("click", e => e.stopPropagation());
+    th.append(h);
+  }
+  return th;
 }
-function line(parent, label, value, cls){
-  if(value === null || value === undefined || value === "") return;
-  const p = document.createElement(cls ? "div" : "p");
-  if(cls) p.className = cls;
-  p.textContent = label ? label + ": " + value : value;
-  parent.append(p);
+function startResize(e, c){
+  e.preventDefault();
+  e.stopPropagation();
+  const th = e.target.closest("th");
+  th.draggable = false;
+  const startX = e.clientX, startW = widthOf(c);
+  const col = document.querySelector('#cols col[data-col="' + c.id + '"]');
+  const move = ev => {
+    LAYOUT.widths[c.id] = Math.max(50, Math.round(startW + ev.clientX - startX));
+    col.style.width = LAYOUT.widths[c.id] + "px";
+    sizeTable();
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    th.draggable = true;
+    saveLayout();
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
 }
-const money = n => n ? "$" + Number(n).toLocaleString() : null;
-const list = a => a && a.length ? a.join(", ") : null;
-function tmdbDetails(cellEl, d){
-  if(!d) return;
-  const s = d.streaming_us || {};
-  line(cellEl, "Released", d.release_date, "sub");
-  line(cellEl, "Streaming (US)", list([...(s.flatrate || []), ...(s.ads || [])]), "sub");
-  line(cellEl, "Languages", list(d.spoken_languages) || d.original_language, "sub");
-  const more = document.createElement("details");
-  const label = document.createElement("summary");
-  label.textContent = "More";
-  more.append(label);
-  line(more, "", d.overview);
-  line(more, "Original language", d.original_language);
-  line(more, "Rent (US)", list(s.rent));
-  line(more, "Buy (US)", list(s.buy));
-  line(more, "Series", d.collection);
-  line(more, "Keywords", list(d.keywords));
-  line(more, "TMDB score", d.tmdb_votes ? Number(d.tmdb_rating).toFixed(1) + " from " + Number(d.tmdb_votes).toLocaleString() + " votes" : null);
-  line(more, "Budget", money(d.budget));
-  line(more, "Revenue", money(d.revenue));
-  line(more, "Studios", list(d.studios));
-  line(more, "Countries", list(d.countries));
-  cellEl.append(more);
+function sizeTable(){
+  if(LAYOUT.view !== "table"){ $("#grid").style.width = ""; return; }
+  $("#grid").style.width = visible().reduce((n, c) => n + widthOf(c), 0) + "px";
 }
-function render(rows){
+function moveBefore(id, target){
+  if(!id || id === target) return;
+  const o = LAYOUT.order.filter(x => x !== id);
+  o.splice(o.indexOf(target), 0, id);
+  LAYOUT.order = o;
+  saveLayout();
+  render();
+}
+function moveBy(id, step){
+  const shown = LAYOUT.order;
+  const i = shown.indexOf(id), j = i + step;
+  if(j < 0 || j >= shown.length) return;
+  [shown[i], shown[j]] = [shown[j], shown[i]];
+  saveLayout();
+  render();
+}
+function renderColumnList(){
+  const box = $("#colList");
+  box.textContent = "";
+  LAYOUT.order.forEach(id => {
+    const c = BY_ID[id];
+    const row = document.createElement("div");
+    row.className = "colrow";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = !LAYOUT.hidden.includes(id);
+    cb.setAttribute("aria-label", "Show " + c.label);
+    cb.addEventListener("change", () => {
+      LAYOUT.hidden = cb.checked ? LAYOUT.hidden.filter(x => x !== id) : LAYOUT.hidden.concat(id);
+      saveLayout();
+      render();
+    });
+    const name = document.createElement("span");
+    name.textContent = c.label;
+    const mk = (text, step, label) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = text; b.setAttribute("aria-label", label + " " + c.label);
+      b.addEventListener("click", () => moveBy(id, step));
+      return b;
+    };
+    row.append(cb, name, mk("↑", -1, "Move earlier"), mk("↓", 1, "Move later"));
+    box.append(row);
+  });
+}
+function render(){
+  const table = LAYOUT.view === "table";
+  const cols = table ? visible() : DETAILED;
+  const grid = $("#grid");
+  grid.classList.toggle("fixed", table);
+  $("#colPanel").hidden = !table;
+  $("#viewTable").setAttribute("aria-pressed", table);
+  $("#viewDetailed").setAttribute("aria-pressed", !table);
+  $("#hideNot").setAttribute("aria-pressed", LAYOUT.hideNot);
+  $("#showNot").setAttribute("aria-pressed", !LAYOUT.hideNot);
+  $("#hideRated").setAttribute("aria-pressed", LAYOUT.hideRated);
+  $("#showRated").setAttribute("aria-pressed", !LAYOUT.hideRated);
+  $("#hideRated").disabled = $("#showRated").disabled = $("#onlyRated").checked;
+
+  const colgroup = $("#cols");
+  colgroup.textContent = "";
+  cols.forEach(c => {
+    const col = document.createElement("col");
+    col.dataset.col = c.id;
+    if(table) col.style.width = widthOf(c) + "px";
+    colgroup.append(col);
+  });
+  sizeTable();
+
+  const head = $("#head");
+  head.textContent = "";
+  const hr = head.insertRow();
+  cols.forEach(c => hr.append(headCell(c, table)));
+
   const body = $("#rows");
   body.textContent = "";
-  rows.forEach(m => {
+  ROWS.forEach(m => {
     const tr = body.insertRow();
-    const t = tr.insertCell();
-    const a = document.createElement("a");
-    a.href = "https://www.imdb.com/title/" + encodeURIComponent(m.tconst) + "/";
-    a.target = "_blank"; a.rel = "noopener";
-    a.textContent = m.title;
-    t.append(a);
-    if(m.original_title && m.original_title !== m.title){
-      const s = document.createElement("div");
-      s.className = "sub"; s.textContent = m.original_title;
-      t.append(s);
-    }
-    const cast = [...new Set((m.principals || [])
-      .filter(p => p.category === "actor" || p.category === "actress" || p.category === "self")
-      .map(p => p.name))].slice(0, 5);
-    [["Director", m.directors], ["Writer", m.writers], ["Cast", cast]].forEach(([label, names]) => {
-      if(!names || !names.length) return;
-      const s = document.createElement("div");
-      s.className = "sub"; s.textContent = label + ": " + names.join(", ");
-      t.append(s);
+    cols.forEach(c => {
+      const td = tr.insertCell();
+      if(c.num) td.className = "num";
+      if(c.node){ td.append(c.node(m)); return; }
+      const v = c.text(m);
+      if(v === null || v === undefined || v === "") return;
+      const text = String(v);
+      if(table && text.length > 60){
+        const d = document.createElement("div");
+        d.className = "clamp"; d.title = text; d.textContent = text;
+        td.append(d);
+      }else td.textContent = text;
     });
-    tmdbDetails(t, m.movies_tmdb_details);
-    cell(tr, (m.genres || []).join(", "));
-    cell(tr, m.runtime_minutes ? m.runtime_minutes + " min" : "—", "num");
-    cell(tr, Number(m.rating).toFixed(1), "num");
-    cell(tr, Number(m.votes).toLocaleString(), "num");
   });
+
+  if(table) renderColumnList();
   const first = TOTAL ? OFFSET + 1 : 0, last = Math.min(OFFSET + PAGE_SIZE, TOTAL);
   /* RLS hides rows rather than refusing, so another account sees an empty table. */
   const filtered = $("#q").value.trim() || $("#genre").value || $("#streaming").checked
+    || $("#onlyWatch").checked || $("#onlyRated").checked || LAYOUT.hideRated
     || parseFloat($("#minRating").value) > 5 || parseInt($("#minVotes").value, 10) > 100;
-  $("#status").textContent = TOTAL ? TOTAL.toLocaleString() + " films"
-    : filtered ? "No films match." : "No films visible. Only the superadmin account can read this table.";
+  setStatus(TOTAL ? TOTAL.toLocaleString() + " films"
+    : filtered ? "No films match." : "No films visible. Only the superadmin account can read this table.");
   $("#page").textContent = first.toLocaleString() + "–" + last.toLocaleString();
   $("#prev").disabled = OFFSET === 0;
   $("#next").disabled = OFFSET + PAGE_SIZE >= TOTAL;
-  document.querySelectorAll("th button").forEach(b => {
-    const on = b.dataset.sort === SORT.col;
-    b.textContent = b.textContent.replace(/ [▲▼]$/, "") + (on ? (SORT.desc ? " ▼" : " ▲") : "");
-    b.closest("th").setAttribute("aria-sort", on ? (SORT.desc ? "descending" : "ascending") : "none");
-  });
+  updateScrollers();
+}
+function updateScrollers(){
+  const w = $("#wrap");
+  $("#scrollLeft").disabled = w.scrollLeft <= 0;
+  $("#scrollRight").disabled = w.scrollLeft + w.clientWidth >= w.scrollWidth - 1;
+}
+function scrollGrid(direction){
+  const w = $("#wrap");
+  w.scrollBy({ left: direction * Math.round(w.clientWidth * 0.8), behavior:"smooth" });
 }
 
 /* ---------- screens ---------- */
@@ -295,6 +610,17 @@ function refilter(){
   clearTimeout(TIMER);
   TIMER = setTimeout(() => { OFFSET = 0; load(); }, 250);
 }
+function setHide(key, on){
+  LAYOUT[key] = on;
+  saveLayout();
+  OFFSET = 0;
+  load();
+}
+function setView(v){
+  LAYOUT.view = v;
+  saveLayout();
+  render();
+}
 
 $("#signin").addEventListener("submit", async e => {
   e.preventDefault();
@@ -304,16 +630,24 @@ $("#signin").addEventListener("submit", async e => {
 });
 $("#signout").addEventListener("click", () => { saveSession(null); showSignIn(); });
 ["#q", "#minRating", "#minVotes"].forEach(s => $(s).addEventListener("input", refilter));
-$("#genre").addEventListener("change", refilter);
-$("#streaming").addEventListener("change", refilter);
+["#genre", "#streaming", "#onlyWatch", "#onlyRated"].forEach(s => $(s).addEventListener("change", refilter));
 $("#prev").addEventListener("click", () => { OFFSET = Math.max(0, OFFSET - PAGE_SIZE); load(); });
 $("#next").addEventListener("click", () => { OFFSET += PAGE_SIZE; load(); });
-document.querySelectorAll("th button").forEach(b => b.addEventListener("click", () => {
-  const col = b.dataset.sort;
-  SORT = SORT.col === col ? { col, desc:!SORT.desc } : { col, desc: col !== "title" };
-  OFFSET = 0;
-  load();
-}));
+$("#scrollLeft").addEventListener("click", () => scrollGrid(-1));
+$("#scrollRight").addEventListener("click", () => scrollGrid(1));
+$("#wrap").addEventListener("scroll", updateScrollers);
+window.addEventListener("resize", updateScrollers);
+$("#hideNot").addEventListener("click", () => setHide("hideNot", true));
+$("#showNot").addEventListener("click", () => setHide("hideNot", false));
+$("#hideRated").addEventListener("click", () => setHide("hideRated", true));
+$("#showRated").addEventListener("click", () => setHide("hideRated", false));
+$("#viewTable").addEventListener("click", () => setView("table"));
+$("#viewDetailed").addEventListener("click", () => setView("detailed"));
+$("#resetLayout").addEventListener("click", () => {
+  LAYOUT = Object.assign(freshLayout(), { view:LAYOUT.view, hideNot:LAYOUT.hideNot, hideRated:LAYOUT.hideRated });
+  saveLayout();
+  render();
+});
 
 loadSession();
 if(SESSION) showApp(); else showSignIn();

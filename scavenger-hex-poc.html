@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scavenger Hex POC</title>
+<style>
+:root{
+  --bg:#0e1116; --panel:#161a21; --panel2:#1d222b; --line:#272d38; --text:#e6e9ee; --muted:#8b95a3;
+  --accent:#ffcf5a; --you:#37c9a0; --danger:#ff7a7a;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;min-height:100vh}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 22px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font-size:16px;margin:0;font-weight:650}
+header h1 span{color:var(--muted);font-weight:400}
+.stats{display:flex;flex-wrap:wrap;gap:18px;margin-left:auto}
+.stat{display:flex;flex-direction:column;line-height:1.15}
+.stat b{font-size:15px;font-variant-numeric:tabular-nums}
+.stat small{color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.6px}
+main{flex:1;display:flex;min-height:0}
+#mapwrap{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;padding:12px}
+svg#map{width:100%;height:auto;max-height:calc(100vh - 84px);display:block;cursor:pointer;user-select:none;-webkit-user-select:none}
+#world,#world *{pointer-events:none}
+#hover{pointer-events:none}
+aside{width:350px;flex-shrink:0;border-left:1px solid var(--line);background:var(--panel);overflow:auto;max-height:calc(100vh - 58px)}
+aside section{padding:14px 16px;border-bottom:1px solid var(--line)}
+aside h2{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:0 0 10px;font-weight:600}
+aside h3{font-size:15px;margin:0 0 6px}
+p{margin:0 0 10px}
+.muted{color:var(--muted)}
+ol{margin:0;padding-left:18px}
+ol li{margin-bottom:6px}
+button{font:inherit;background:var(--accent);color:#1d1600;border:0;border-radius:8px;padding:8px 12px;font-weight:600;cursor:pointer}
+button.secondary{background:#262d3a;color:var(--text);border:1px solid #394254}
+button:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.row:last-child{margin-bottom:0}
+.seg{display:inline-flex;border:1px solid #394254;border-radius:8px;overflow:hidden}
+.seg button{background:transparent;color:var(--muted);border-radius:0;font-weight:500;padding:6px 10px}
+.seg button.on{background:#2b3342;color:var(--text)}
+label.chk{display:flex;align-items:center;gap:6px;cursor:pointer}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px}
+.card.beacon{border-color:#6b5a27}
+.biz{display:flex;gap:10px;align-items:center;margin-bottom:8px}
+.biz .em{font-size:26px;line-height:1}
+.biz small{display:block;color:var(--muted)}
+.ok{color:#7fe0b4}
+.warn{color:#ffc27a}
+.banner{background:#2a2410;border:1px solid #6b5a27;border-radius:10px;padding:12px}
+.banner .hint{color:var(--danger);margin:8px 0 0}
+input[type=text]{font:inherit;background:#10141a;color:var(--text);border:1px solid #394254;border-radius:8px;padding:7px 9px;flex:1;min-width:0}
+.legend{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;font-size:13px}
+.sw{width:18px;height:14px;border-radius:3px;display:inline-block}
+#log{list-style:none;margin:0;padding:0;font-size:13px}
+#log li{padding:6px 0;border-bottom:1px dashed var(--line)}
+#log li:last-child{border-bottom:0}
+#log time{color:var(--muted);font-size:11px;margin-right:6px;font-variant-numeric:tabular-nums}
+.halo{animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.10}50%{opacity:.38}}
+.target{animation:blink 1.1s ease-in-out infinite}
+@keyframes blink{0%,100%{stroke-opacity:.35}50%{stroke-opacity:1}}
+@media (max-width:860px){
+  main{flex-direction:column}
+  aside{width:auto;max-height:none;border-left:0;border-top:1px solid var(--line)}
+  svg#map{max-height:none}
+  .stats{margin-left:0}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Scavenger <span>· hex proof of concept · the map, businesses and players are all invented</span></h1>
+  <div class="stats" id="stats"></div>
+</header>
+<main>
+  <div id="mapwrap">
+    <svg id="map" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Hexagon map">
+      <defs>
+        <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+          <feGaussianBlur stdDeviation="3.2" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      <g id="world"></g>
+      <polygon id="hover" fill="none" stroke="#ffffff" stroke-opacity=".55" stroke-width="1.5" style="display:none"/>
+    </svg>
+  </div>
+  <aside>
+    <section id="info"></section>
+    <section>
+      <h2>Map options</h2>
+      <div class="row">
+        <span class="muted">Light routes by</span>
+        <span class="seg" id="routeSeg">
+          <button data-route="roads" class="on">Streets</button>
+          <button data-route="straight">Straight line</button>
+        </span>
+      </div>
+      <div class="row">
+        <label class="chk"><input type="checkbox" id="peek"> Peek under the fog</label>
+        <button class="secondary" id="reset" style="margin-left:auto">Reset</button>
+      </div>
+    </section>
+    <section>
+      <h2>Legend</h2>
+      <div class="legend">
+        <span class="sw" style="background:var(--you)"></span><span>Your tiles (🏠 = home base)</span>
+        <span class="sw" style="background:linear-gradient(90deg,#ef6f8f 33%,#5aa9f0 33% 66%,#b48cf0 66%)"></span><span>Other players' tiles</span>
+        <span class="sw" style="background:var(--accent);box-shadow:0 0 8px var(--accent)"></span><span>Beacon: a business on the network, visible through fog</span>
+        <span class="sw" style="background:#232830;border:1px dashed #8b95a3"></span><span>Local business, not on the network yet</span>
+        <span class="sw" style="background:#6d685c"></span><span>Street (public, can't be claimed)</span>
+        <span class="sw" style="background:#2c5f86"></span><span>River · bridges in tan</span>
+        <span class="sw" style="background:#161a20;border:1px solid #2a303a"></span><span>Fog of war</span>
+      </div>
+    </section>
+    <section>
+      <h2>Activity</h2>
+      <ul id="log"></ul>
+    </section>
+  </aside>
+</main>
+
+<script>
+"use strict";
+/* ---------- hex math (pointy-top, axial q,r; map laid out as odd-r offset rectangle) ---------- */
+const COLS = 26, ROWS = 18, S = 20, SQ3 = Math.sqrt(3);
+const DIRS = [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];
+const key = (q, r) => q + "," + r;
+const offToAx = (col, row) => ({ q: col - ((row - (row & 1)) >> 1), r: row });
+const center = t => ({ x: S * SQ3 * (t.q + t.r / 2), y: S * 1.5 * t.r });
+const dist = (a, b) => { const dq = a.q - b.q, dr = a.r - b.r; return (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2; };
+function axRound(q, r) {
+  const s = -q - r; let rq = Math.round(q), rr = Math.round(r); const rs = Math.round(s);
+  const dq = Math.abs(rq - q), dr = Math.abs(rr - r), ds = Math.abs(rs - s);
+  if (dq > dr && dq > ds) rq = -rr - rs; else if (dr > ds) rr = -rq - rs;
+  return [rq, rr];
+}
+function hexPts(cx, cy, s) {
+  let p = "";
+  for (let i = 0; i < 6; i++) { const a = Math.PI / 180 * (60 * i - 30); p += (cx + s * Math.cos(a)).toFixed(1) + "," + (cy + s * Math.sin(a)).toFixed(1) + " "; }
+  return p;
+}
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+/* ---------- world data ---------- */
+const NPCS = {
+  mara:  { name: "Mara",  color: "#ef6f8f" },
+  dev:   { name: "Dev",   color: "#5aa9f0" },
+  priya: { name: "Priya", color: "#b48cf0" },
+};
+const BIZ = [
+  { id: "coffee",   name: "Demo Coffee",   emoji: "☕", status: "beacon", task: "gps", at: [3, 5] },
+  { id: "pizza",    name: "Demo Pizza",    emoji: "🍕", status: "beacon", task: "web", at: [12, 16] },
+  { id: "books",    name: "Demo Books",    emoji: "📚", status: "beacon", task: "gps", at: [11, 1] },
+  { id: "taproom",  name: "Demo Taproom",  emoji: "🍺", status: "beacon", task: "web", at: [22, 11] },
+  { id: "lanes",    name: "Demo Bowling",  emoji: "🎳", status: "beacon", task: "gps", at: [24, 1] },
+  { id: "bakery",   name: "Demo Bakery",   emoji: "🥐", status: "local",  task: "web", at: [9, 12] },
+  { id: "hardware", name: "Demo Hardware", emoji: "🔧", status: "local",  task: "gps", at: [3, 16] },
+  { id: "tacos",    name: "Demo Tacos",    emoji: "🌮", status: "local",  task: "web", at: [20, 6] },
+  { id: "florist",  name: "Demo Florist",  emoji: "💐", status: "local",  task: "web", at: [7, 7] },
+  { id: "records",  name: "Demo Records",  emoji: "🎵", status: "local",  task: "gps", at: [23, 15] },
+];
+const TERRAIN_NAME = { land: "City block", park: "Park", road: "Street", bridge: "Bridge", river: "River" };
+const CLAIM_COST = 10, TASK_REWARD = 20, NOMINATE_REWARD = 5, PIONEER_BONUS = 30;
+
+let state, svg, world, hoverEl;
+
+function newState() {
+  const rnd = mulberry32(7);
+  const tiles = new Map();
+  const at = (col, row) => (col < 0 || row < 0 || col >= COLS || row >= ROWS) ? null : tiles.get(key(offToAx(col, row).q, row));
+  for (let row = 0; row < ROWS; row++) for (let col = 0; col < COLS; col++) {
+    const { q, r } = offToAx(col, row);
+    tiles.set(key(q, r), { q, r, col, row, terrain: "land", shade: rnd() });
+  }
+  // River: two tiles wide, meandering, shifting at most one column per row so it never leaks.
+  for (let row = 0; row < ROWS; row++) {
+    const c = 15 + Math.round(Math.sin(row * 0.5) * 1.2);
+    at(c, row).terrain = "river"; at(c + 1, row).terrain = "river";
+  }
+  const road = (t, bridge) => { if (!t) return; if (t.terrain === "river") { if (bridge) t.terrain = "bridge"; return; } t.terrain = "road"; };
+  for (const row of [3, 9, 14]) for (let col = 0; col < COLS; col++) road(at(col, row), true); // avenues, with bridges
+  for (const col of [5, 10, 21]) for (let row = 0; row < ROWS; row++) road(at(col, row), false); // zig-zag streets
+  for (const t of tiles.values()) { if (t.q === 6 || t.q + t.r === 26) road(t, false); }       // two diagonal boulevards
+  for (const [c, r] of [[8, 5], [24, 7]]) {                                                         // parks
+    const p = at(c, r);
+    for (const t of tiles.values()) if (dist(t, p) <= 1 && t.terrain === "land") t.terrain = "park";
+  }
+
+  const s = {
+    tiles, revealed: new Set(), owner: new Map(), pins: new Map(),
+    credits: 50, pioneer: false, nominations: 0,
+    businesses: [], home: null, selected: null, mode: "normal", relocate: null, hint: "",
+    route: "roads", peek: false, lastPath: [], busy: false, log: [],
+  };
+  const taken = new Set();
+  const nearestLand = (col, row) => {
+    const start = at(col, row), seen = new Set([key(start.q, start.r)]), queue = [start];
+    while (queue.length) {
+      const t = queue.shift(), k = key(t.q, t.r);
+      if (t.terrain === "land" && !taken.has(k)) return k;
+      for (const [dq, dr] of DIRS) { const nk = key(t.q + dq, t.r + dr); if (tiles.has(nk) && !seen.has(nk)) { seen.add(nk); queue.push(tiles.get(nk)); } }
+    }
+  };
+  s.home = nearestLand(7, 11); taken.add(s.home);
+  s.owner.set(s.home, "you");
+  for (const b of BIZ) {
+    const k = nearestLand(b.at[0], b.at[1]); taken.add(k);
+    const biz = { ...b, key: k, visited: false };
+    s.businesses.push(biz);
+    if (biz.status === "beacon") s.owner.set(k, "biz:" + biz.id);
+  }
+  // Other players' clusters. Dev is squatting on Demo Tacos' tile.
+  const cluster = (who, col, row, n) => {
+    const start = at(col, row), queue = [start], seen = new Set([key(start.q, start.r)]); let got = 0;
+    while (queue.length && got < n) {
+      const t = queue.shift(), k = key(t.q, t.r);
+      const isSeed = t === start;
+      if (claimableTerrain(t) && !s.owner.has(k) && (isSeed || !s.businesses.some(b => b.key === k))) { s.owner.set(k, who); got++; }
+      for (const [dq, dr] of DIRS) { const nk = key(t.q + dq, t.r + dr); if (tiles.has(nk) && !seen.has(nk)) { seen.add(nk); queue.push(tiles.get(nk)); } }
+    }
+  };
+  cluster("mara", 4, 12, 5);
+  const tacoTile = s.tiles.get(s.businesses.find(b => b.id === "tacos").key);
+  cluster("dev", tacoTile.col, tacoTile.row, 6);
+  cluster("priya", 12, 5, 5);
+
+  const home = tiles.get(s.home);
+  for (const t of tiles.values()) if (dist(t, home) <= 2) s.revealed.add(key(t.q, t.r));
+  return s;
+}
+
+/* ---------- rules ---------- */
+const claimableTerrain = t => t.terrain === "land" || t.terrain === "park";
+const bizAt = k => state.businesses.find(b => b.key === k);
+const bizById = id => state.businesses.find(b => b.id === id);
+const canClaim = k => state.revealed.has(k) && claimableTerrain(state.tiles.get(k)) && !state.owner.has(k);
+const canRelocateTo = k => canClaim(k) && !bizAt(k);
+const ownedByYou = () => [...state.owner.values()].filter(o => o === "you").length;
+
+function stepCost(t) { return t.terrain === "road" || t.terrain === "bridge" ? 1 : t.terrain === "park" ? 3 : t.terrain === "land" ? 4 : Infinity; }
+function astar(startK, goalK) {
+  const tiles = state.tiles, goal = tiles.get(goalK);
+  const g = new Map([[startK, 0]]), came = new Map(), open = new Map([[startK, dist(tiles.get(startK), goal)]]);
+  while (open.size) {
+    let cur = null, best = Infinity;
+    for (const [k, f] of open) if (f < best) { best = f; cur = k; }
+    if (cur === goalK) break;
+    open.delete(cur);
+    const t = tiles.get(cur);
+    for (const [dq, dr] of DIRS) {
+      const nk = key(t.q + dq, t.r + dr), n = tiles.get(nk);
+      if (!n) continue;
+      const c = stepCost(n); if (c === Infinity) continue;
+      const ng = g.get(cur) + c;
+      if (ng < (g.has(nk) ? g.get(nk) : Infinity)) { g.set(nk, ng); came.set(nk, cur); open.set(nk, ng + dist(n, goal)); }
+    }
+  }
+  if (!g.has(goalK)) return null;
+  const path = [goalK]; let k = goalK;
+  while (k !== startK) { k = came.get(k); path.push(k); }
+  return path.reverse();
+}
+function hexLine(a, b) {
+  const n = dist(a, b), out = [];
+  for (let i = 0; i <= n; i++) {
+    const f = n === 0 ? 0 : i / n;
+    const [q, r] = axRound(a.q + (b.q - a.q) * f + 1e-6, a.r + (b.r - a.r) * f + 2e-6);
+    const k = key(q, r); if (state.tiles.has(k)) out.push(k);
+  }
+  return out;
+}
+const routeFor = b => state.route === "roads" ? astar(state.home, b.key) : hexLine(state.tiles.get(state.home), state.tiles.get(b.key));
+
+function nearestFree(fromK) {
+  const start = state.tiles.get(fromK), queue = [start], seen = new Set([fromK]);
+  while (queue.length) {
+    const t = queue.shift(), k = key(t.q, t.r);
+    if (k !== fromK && claimableTerrain(t) && !state.owner.has(k) && !bizAt(k)) return k;
+    for (const [dq, dr] of DIRS) { const nk = key(t.q + dq, t.r + dr); if (state.tiles.has(nk) && !seen.has(nk)) { seen.add(nk); queue.push(state.tiles.get(nk)); } }
+  }
+  return null;
+}
+
+function log(html) {
+  const d = new Date();
+  state.log.unshift({ t: d.toTimeString().slice(0, 5), html });
+  if (state.log.length > 40) state.log.pop();
+}
+
+/* ---------- actions ---------- */
+function claim(k) {
+  if (!canClaim(k) || state.credits < CLAIM_COST) return;
+  state.credits -= CLAIM_COST; state.owner.set(k, "you");
+  const b = bizAt(k);
+  log(`You claimed a tile for ${CLAIM_COST} credits${b ? ` — it's ${b.emoji} ${b.name}'s tile, so you're squatting` : ""}.`);
+}
+function doTask(b) {
+  if (state.busy || b.visited || b.status !== "beacon") return;
+  const path = routeFor(b);
+  if (!path) { log(`No route to ${b.name}.`); renderAll(); return; }
+  const before = state.revealed.size, mode = state.route;
+  state.busy = true; state.lastPath = [];
+  let i = 0;
+  const step = () => {
+    if (i < path.length) {
+      state.revealed.add(path[i]); state.lastPath.push(path[i]); i++;
+      renderMap(); setTimeout(step, 45);
+      return;
+    }
+    const dest = state.tiles.get(b.key);
+    for (const t of state.tiles.values()) if (dist(t, dest) <= 1) state.revealed.add(key(t.q, t.r));
+    b.visited = true; state.credits += TASK_REWARD; state.busy = false;
+    log(`${b.emoji} Completed <b>${b.name}</b>'s task (+${TASK_REWARD}). Lit ${state.revealed.size - before} new tiles ${mode === "roads" ? "along the streets" : "in a straight line"}.`);
+    renderAll();
+  };
+  renderPanel();
+  step();
+}
+function nominate(b) {
+  if (b.status !== "local") return;
+  b.status = "nominated"; state.nominations++; state.credits += NOMINATE_REWARD;
+  log(`⭐ You nominated <b>${b.name}</b> (+${NOMINATE_REWARD}). Scavenger tells the owner their customers want rewards there.`);
+}
+function signup(b) {
+  if (b.status !== "nominated") return;
+  b.status = "beacon";
+  log(`${b.emoji} <b>${b.name}</b> signed up as a Beacon. Every player can now see it through the fog.`);
+  const k = b.key, o = state.owner.get(k);
+  if (o === "you") {
+    state.mode = "relocate"; state.relocate = { bizId: b.id, from: k }; state.hint = "";
+    log(`⚖️ Eminent Domain Swap: you were holding ${b.name}'s real tile. Pick a new tile.`);
+  } else {
+    if (o && NPCS[o]) {
+      const to = nearestFree(k);
+      if (to) state.owner.set(to, o);
+      log(`⚖️ Eminent Domain Swap: ${NPCS[o].name} was squatting on ${b.name}'s tile, was moved to a nearby tile and earned Pioneer status.`);
+    }
+    state.owner.set(k, "biz:" + b.id);
+  }
+}
+function relocateTo(k) {
+  const { bizId, from } = state.relocate, b = bizById(bizId);
+  state.owner.set(k, "you"); state.owner.set(from, "biz:" + bizId);
+  if (state.pins.has(from)) { state.pins.set(k, state.pins.get(from)); state.pins.delete(from); }
+  state.pioneer = true; state.credits += PIONEER_BONUS;
+  state.mode = "normal"; state.relocate = null; state.selected = k;
+  log(`🏅 You moved to your new tile. ${b.name} has its home back. You earned <b>Pioneer</b> status and ${PIONEER_BONUS} bonus credits.`);
+}
+
+/* ---------- rendering ---------- */
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function terrainFill(t) {
+  switch (t.terrain) {
+    case "road": return "#6d685c";
+    case "bridge": return "#9a8b6c";
+    case "river": return `hsl(207,52%,${27 + t.shade * 5}%)`;
+    case "park": return `hsl(128,28%,${24 + t.shade * 5}%)`;
+    default: return `hsl(150,9%,${21 + t.shade * 6}%)`;
+  }
+}
+const fogFill = t => `hsl(215,14%,${8 + t.shade * 3.5}%)`;
+const ownerColor = o => o === "you" ? "#37c9a0" : (NPCS[o] ? NPCS[o].color : "#ffcf5a");
+
+function renderMap() {
+  let base = "", own = "", fog = "", trail = "", icons = "", fx = "";
+  for (const t of state.tiles.values()) {
+    const k = key(t.q, t.r), c = center(t), vis = state.revealed.has(k), pts = hexPts(c.x, c.y, S);
+    if (vis || state.peek) {
+      base += `<polygon points="${pts}" fill="${terrainFill(t)}" stroke="#0b0d11" stroke-width="1"/>`;
+      const o = state.owner.get(k);
+      if (o && !o.startsWith("biz:")) own += `<polygon points="${hexPts(c.x, c.y, S * 0.8)}" fill="${ownerColor(o)}" fill-opacity="${o === "you" ? 0.62 : 0.5}" stroke="${ownerColor(o)}" stroke-width="1.5"/>`;
+      if (!vis) fog += `<polygon points="${pts}" fill="#0b0e12" fill-opacity="0.62"/>`;
+    } else {
+      base += `<polygon points="${pts}" fill="${fogFill(t)}" stroke="#0b0d11" stroke-width="1"/>`;
+    }
+  }
+  if (state.lastPath.length > 1) {
+    const p = state.lastPath.map(k => { const c = center(state.tiles.get(k)); return c.x.toFixed(1) + "," + c.y.toFixed(1); }).join(" ");
+    trail = `<polyline points="${p}" fill="none" stroke="#ffcf5a" stroke-width="3" stroke-opacity=".75" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1 7"/>`;
+  }
+  const hc = center(state.tiles.get(state.home));
+  icons += `<text x="${hc.x}" y="${hc.y + 1}" font-size="${S * 0.95}" text-anchor="middle" dominant-baseline="central">🏠</text>`;
+  for (const [k] of state.pins) {
+    const c = center(state.tiles.get(k));
+    icons += `<text x="${c.x + S * 0.42}" y="${c.y + S * 0.42}" font-size="${S * 0.55}" text-anchor="middle" dominant-baseline="central">📷</text>`;
+  }
+  for (const b of state.businesses) {
+    const c = center(state.tiles.get(b.key)), vis = state.revealed.has(b.key);
+    if (b.status === "beacon") {
+      icons += `<circle class="halo" cx="${c.x}" cy="${c.y}" r="${S * 1.15}" fill="#ffcf5a"/>`
+        + `<circle cx="${c.x}" cy="${c.y}" r="${S * 0.72}" fill="#ffcf5a" filter="url(#glow)"/>`
+        + `<text x="${c.x}" y="${c.y + 1}" font-size="${S * 0.9}" text-anchor="middle" dominant-baseline="central">${b.emoji}</text>`;
+      if (b.visited) icons += `<circle cx="${c.x + S * 0.6}" cy="${c.y - S * 0.6}" r="6.5" fill="#37c9a0" stroke="#0e1116" stroke-width="1.5"/><text x="${c.x + S * 0.6}" y="${c.y - S * 0.6 + 0.5}" font-size="9" font-weight="700" fill="#0e1116" text-anchor="middle" dominant-baseline="central">✓</text>`;
+    } else if (vis || state.peek) {
+      const nom = b.status === "nominated";
+      icons += `<circle cx="${c.x}" cy="${c.y}" r="${S * 0.66}" fill="#232830" stroke="${nom ? "#ffcf5a" : "#8b95a3"}" stroke-width="1.5" stroke-dasharray="3 2"/>`
+        + `<text x="${c.x}" y="${c.y + 1}" font-size="${S * 0.8}" text-anchor="middle" dominant-baseline="central" opacity=".8">${b.emoji}</text>`;
+      if (nom) icons += `<text x="${c.x + S * 0.6}" y="${c.y - S * 0.6}" font-size="11" fill="#ffcf5a" text-anchor="middle" dominant-baseline="central">★</text>`;
+    }
+  }
+  if (state.mode === "relocate") {
+    for (const t of state.tiles.values()) {
+      const k = key(t.q, t.r);
+      if (canRelocateTo(k)) { const c = center(t); fx += `<polygon class="target" points="${hexPts(c.x, c.y, S * 0.84)}" fill="#ffffff" fill-opacity=".06" stroke="#ffffff" stroke-width="1.6" stroke-dasharray="4 3"/>`; }
+    }
+    const c = center(state.tiles.get(state.relocate.from));
+    fx += `<polygon points="${hexPts(c.x, c.y, S * 0.9)}" fill="none" stroke="#ff7a7a" stroke-width="2.5"/>`;
+  }
+  if (state.selected) {
+    const c = center(state.tiles.get(state.selected));
+    fx += `<polygon points="${hexPts(c.x, c.y, S - 1)}" fill="none" stroke="#ffffff" stroke-width="2.5"/>`;
+  }
+  world.innerHTML = base + own + fog + trail + icons + fx;
+}
+
+function renderStats() {
+  const beacons = state.businesses.filter(b => b.status === "beacon");
+  const pct = Math.round(100 * state.revealed.size / state.tiles.size);
+  document.getElementById("stats").innerHTML = [
+    ["Credits", state.credits],
+    ["Your tiles", ownedByYou()],
+    ["Map revealed", pct + "%"],
+    ["Beacons done", beacons.filter(b => b.visited).length + " / " + beacons.length],
+    ["Nominations", state.nominations],
+    ["Status", state.pioneer ? "🏅 Pioneer" : "Explorer"],
+  ].map(([l, v]) => `<div class="stat"><b>${v}</b><small>${l}</small></div>`).join("");
+}
+
+function bizCard(b) {
+  const head = `<div class="biz"><span class="em">${b.emoji}</span><div><b>${esc(b.name)}</b>`;
+  if (b.status === "beacon") {
+    const taskText = b.task === "gps" ? "GPS check-in at the store" : "Visit their website";
+    let body;
+    if (b.visited) body = `<p class="ok" style="margin:0">✓ Task done: the route here is lit.</p>`;
+    else {
+      const byRoad = astar(state.home, b.key), straight = hexLine(state.tiles.get(state.home), state.tiles.get(b.key));
+      body = `<p>Task: <b>${taskText}</b> · +${TASK_REWARD} credits</p>
+        <p class="muted">Route from home: ${byRoad ? byRoad.length : "–"} tiles by street, ${straight.length} in a straight line.</p>
+        <button data-act="task" data-id="${b.id}" ${state.busy ? "disabled" : ""}>${b.task === "gps" ? "📍 Check in (simulated)" : "🌐 Visit website (simulated)"}</button>`;
+    }
+    return `<div class="card beacon">${head}<small>Beacon partner · visible through the fog</small></div></div>${body}</div>`;
+  }
+  if (b.status === "local") {
+    return `<div class="card">${head}<small>Not on Scavenger yet</small></div></div>
+      <p>Want rewards here? A nomination tells the owner that customers are asking. +${NOMINATE_REWARD} credits.</p>
+      <button data-act="nominate" data-id="${b.id}">⭐ Nominate</button></div>`;
+  }
+  return `<div class="card">${head}<small>Nominated, waiting on the owner</small></div></div>
+    <p class="muted">The owner has been told customers want rewards here.</p>
+    <button class="secondary" data-act="signup" data-id="${b.id}">▶ Simulate: owner signs up as a Beacon</button></div>`;
+}
+
+function renderPanel() {
+  const el = document.getElementById("info");
+  if (state.mode === "relocate") {
+    const b = bizById(state.relocate.bizId);
+    el.innerHTML = `<div class="banner"><h3>⚖️ Eminent Domain Swap</h3>
+      <p><b>${esc(b.name)}</b> just joined and gets priority on its real location: the tile you were holding (red outline).</p>
+      <p style="margin:0">Pick any outlined tile to move to, free. You'll earn <b>Pioneer</b> status and ${PIONEER_BONUS} bonus credits.</p>
+      ${state.hint ? `<p class="hint">${esc(state.hint)}</p>` : ""}</div>`;
+    return;
+  }
+  const k = state.selected;
+  if (!k) {
+    el.innerHTML = `<h2>How to play</h2><ol>
+      <li>Click a glowing <b>Beacon</b> and do its task. The streets between your home 🏠 and the Beacon light up.</li>
+      <li>Click any revealed tile to <b>claim</b> it for ${CLAIM_COST} credits. Streets and water are public.</li>
+      <li>Find a grey <b>local business</b>, nominate it, then simulate it signing up. If you've claimed its tile, you'll get the <b>Eminent Domain Swap</b>.</li></ol>
+      <p class="muted" style="margin:10px 0 0">Quickest way to see it: 🥐 Demo Bakery is two tiles from home. Claim its tile, nominate it, then sign it up.</p>`;
+    return;
+  }
+  const t = state.tiles.get(k), vis = state.revealed.has(k), b = bizAt(k), o = state.owner.get(k);
+  const d = dist(t, state.tiles.get(state.home));
+  let h = "";
+  if (!vis && !(b && b.status === "beacon")) {
+    el.innerHTML = `<h3>🌫️ Fog of war</h3><p class="muted" style="margin:0">${d} tiles from home. You can't see what's here yet. Complete a Beacon task and the streets between home and that Beacon will light up.</p>`;
+    return;
+  }
+  h += `<h3>${vis ? TERRAIN_NAME[t.terrain] : "Hidden tile"}</h3><p class="muted">${k === state.home ? "🏠 Your home base. Every route starts here." : d + " tiles from home"}</p>`;
+  if (b) h += bizCard(b);
+  if (vis) {
+    let who;
+    if (o === "you") who = `<b style="color:var(--you)">You</b>`;
+    else if (o && o.startsWith("biz:")) who = `<b style="color:var(--accent)">${esc(bizById(o.slice(4)).name)}</b> (business)`;
+    else if (o) who = `<b style="color:${NPCS[o].color}">${NPCS[o].name}</b> (another player)`;
+    else who = "Nobody";
+    h += `<p>Owner: ${who}</p>`;
+    if (!o) {
+      if (claimableTerrain(t)) h += `<p><button data-act="claim" ${state.credits < CLAIM_COST ? "disabled" : ""}>Claim for ${CLAIM_COST} credits</button>${state.credits < CLAIM_COST ? ` <span class="muted">Not enough credits. Do a Beacon task.</span>` : ""}</p>`;
+      else h += `<p class="muted">Streets and water are public and can't be claimed.</p>`;
+    }
+    if (o === "you" && b && b.status !== "beacon") h += `<p class="warn">⚠ You're squatting on a business's real location. If it joins the network, it gets this tile back and you get moved.</p>`;
+    if (o === "you") {
+      const pin = state.pins.get(k);
+      h += pin
+        ? `<p>📷 “${esc(pin)}”</p><button class="secondary" data-act="unpin">Remove photo pin</button>`
+        : `<div class="row"><input type="text" id="pinText" maxlength="80" placeholder="Photo caption, e.g. mural on 5th"><button class="secondary" data-act="pin">📷 Pin</button></div>`;
+    }
+  }
+  el.innerHTML = h;
+}
+
+function renderLog() {
+  document.getElementById("log").innerHTML = state.log.length
+    ? state.log.map(e => `<li><time>${e.t}</time>${e.html}</li>`).join("")
+    : `<li class="muted">Nothing yet.</li>`;
+}
+function renderAll() { renderMap(); renderStats(); renderPanel(); renderLog(); }
+
+/* ---------- wiring ---------- */
+function tileFromEvent(e) {
+  const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+  const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+  const [q, r] = axRound((SQ3 / 3 * p.x - p.y / 3) / S, (2 / 3 * p.y) / S);
+  const k = key(q, r);
+  return state.tiles.has(k) ? k : null;
+}
+function onTileClick(k) {
+  if (state.mode === "relocate") {
+    if (canRelocateTo(k)) relocateTo(k);
+    else state.hint = "That tile isn't available. Pick one with a dashed white outline.";
+    renderAll(); return;
+  }
+  state.selected = state.selected === k ? null : k;
+  renderMap(); renderPanel();
+}
+function act(name, id) {
+  const k = state.selected;
+  if (name === "claim") claim(k);
+  else if (name === "task") { doTask(bizById(id)); return; }
+  else if (name === "nominate") nominate(bizById(id));
+  else if (name === "signup") signup(bizById(id));
+  else if (name === "pin") { const v = document.getElementById("pinText").value.trim(); if (!v) return; state.pins.set(k, v); log(`📷 You pinned a photo: “${esc(v)}”.`); }
+  else if (name === "unpin") state.pins.delete(k);
+  renderAll();
+}
+
+function init() {
+  svg = document.getElementById("map"); world = document.getElementById("world"); hoverEl = document.getElementById("hover");
+  state = newState();
+  // viewBox from real tile extents
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const t of state.tiles.values()) { const c = center(t); minX = Math.min(minX, c.x); maxX = Math.max(maxX, c.x); minY = Math.min(minY, c.y); maxY = Math.max(maxY, c.y); }
+  const px = S * SQ3 / 2 + 4, py = S + 4;
+  svg.setAttribute("viewBox", `${(minX - px).toFixed(1)} ${(minY - py).toFixed(1)} ${(maxX - minX + 2 * px).toFixed(1)} ${(maxY - minY + 2 * py).toFixed(1)}`);
+
+  svg.addEventListener("click", e => { const k = tileFromEvent(e); if (k) onTileClick(k); });
+  svg.addEventListener("mousemove", e => {
+    const k = tileFromEvent(e);
+    if (!k) { hoverEl.style.display = "none"; return; }
+    const c = center(state.tiles.get(k)); hoverEl.setAttribute("points", hexPts(c.x, c.y, S - 1)); hoverEl.style.display = "";
+  });
+  svg.addEventListener("mouseleave", () => { hoverEl.style.display = "none"; });
+  document.getElementById("info").addEventListener("click", e => {
+    const btn = e.target.closest("[data-act]");
+    if (btn && !btn.disabled) act(btn.dataset.act, btn.dataset.id);
+  });
+  document.getElementById("info").addEventListener("keydown", e => {
+    if (e.key === "Enter" && e.target.id === "pinText") act("pin");
+  });
+  document.getElementById("routeSeg").addEventListener("click", e => {
+    const btn = e.target.closest("[data-route]"); if (!btn) return;
+    state.route = btn.dataset.route;
+    document.querySelectorAll("#routeSeg button").forEach(x => x.classList.toggle("on", x === btn));
+    renderPanel();
+  });
+  document.getElementById("peek").addEventListener("change", e => { state.peek = e.target.checked; renderMap(); });
+  document.getElementById("reset").addEventListener("click", () => {
+    if (state.busy) return;
+    const route = state.route, peek = state.peek;
+    state = newState(); state.route = route; state.peek = peek;
+    log("Map reset.");
+    renderAll();
+  });
+  log("Welcome. You start at home 🏠 with 50 credits. The rest of the map is fog.");
+  renderAll();
+}
+init();
+</script>
+</body>
+</html>

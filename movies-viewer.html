@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Movies viewer</title>
+<style>
+:root{--bg:#faf9f7;--panel:#fff;--ink:#1f2328;--muted:#646b73;--line:#e2dfd9;--accent:#1a5fb4;--error:#b3261e}
+@media (prefers-color-scheme:dark){:root{--bg:#16181b;--panel:#1f2226;--ink:#e8e6e3;--muted:#9aa1a9;--line:#33373c;--accent:#7cb2ff;--error:#ffb4ab}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1080px;margin:0 auto;padding:24px 16px 40px}
+h1{font-size:22px;margin:0}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:16px}
+label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+input,select,button{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:7px 9px}
+button{cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+button.link{border:0;background:none;color:var(--accent);padding:0}
+.filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:12px;margin-bottom:12px}
+.status{color:var(--muted);margin-bottom:8px;min-height:22px}
+.wrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+tbody tr:last-child td{border-bottom:0}
+th button{border:0;background:none;padding:0;font-weight:600}
+td.num,th.num{text-align:right;white-space:nowrap}
+td a{color:var(--accent);text-decoration:none}
+td a:hover{text-decoration:underline}
+.sub{color:var(--muted);font-size:13px}
+.pager{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:12px}
+.signin{max-width:340px;margin:12vh auto 0;display:grid;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:20px}
+.error{color:var(--error)}
+footer{margin-top:20px;color:var(--muted);font-size:13px}
+footer p{margin:4px 0}
+.tmdb img{vertical-align:baseline;margin-right:4px}
+.check{flex-direction:row;align-items:center;gap:6px;margin-bottom:12px}
+.check input{width:auto}
+details{margin-top:4px}
+summary{cursor:pointer;color:var(--accent);font-size:13px}
+details p{margin:6px 0 0;font-size:13px}
+.lead{margin:4px 0 0;font-size:13px}
+[hidden]{display:none!important}
+@media (max-width:640px){.filters{grid-template-columns:1fr 1fr}.filters .wide{grid-column:1/-1}}
+</style>
+</head>
+<body>
+<main>
+  <form id="signin" class="signin" hidden>
+    <h1>Movies viewer</h1>
+    <label>Email <input id="email" type="email" autocomplete="username" required></label>
+    <label>Password <input id="password" type="password" autocomplete="current-password" required></label>
+    <button type="submit">Sign in</button>
+    <div id="signinError" class="error" role="alert"></div>
+  </form>
+
+  <section id="app" hidden>
+    <header>
+      <h1>Movies viewer</h1>
+      <button id="signout" class="link" type="button">Sign out</button>
+    </header>
+    <div class="filters">
+      <label class="wide">Title <input id="q" type="search" placeholder="Search titles"></label>
+      <label>Genre <select id="genre"><option value="">All genres</option></select></label>
+      <label>Minimum rating <input id="minRating" type="number" min="5" max="10" step="0.1" value="5"></label>
+      <label>Minimum votes <input id="minVotes" type="number" min="100" step="100" value="100"></label>
+    </div>
+    <label class="check"><input id="streaming" type="checkbox"> Only films included with a US streaming service</label>
+    <div id="status" class="status" role="status"></div>
+    <div class="wrap">
+      <table>
+        <thead><tr>
+          <th><button data-sort="title" type="button">Title</button></th>
+          <th>Genres</th>
+          <th class="num"><button data-sort="runtime_minutes" type="button">Runtime</button></th>
+          <th class="num"><button data-sort="rating" type="button">Rating</button></th>
+          <th class="num"><button data-sort="votes" type="button">Votes</button></th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <button id="prev" type="button">Previous</button>
+      <span id="page"></span>
+      <button id="next" type="button">Next</button>
+    </div>
+  </section>
+
+  <footer>
+    <p>Information courtesy of IMDb (https://www.imdb.com). Used with permission.</p>
+    <p class="tmdb"><img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg" alt="TMDB" width="72" height="10">
+    This application uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.</p>
+    <p>Streaming availability data from JustWatch.</p>
+  </footer>
+</main>
+
+<script>
+const SUPABASE_URL = "https://szvlvfgslymhlgdsjzyd.supabase.co";
+const SUPABASE_KEY = "sb_publishable_oEhQnbZ6uyM3Mr1mWp7Z1Q_exCnRIfm";
+const AUTH_URL     = SUPABASE_URL + "/auth/v1";
+const TABLE_URL    = SUPABASE_URL + "/rest/v1/movies_imdb_titles";
+const SESSION_KEY  = "cct.movies.session";   // separate from the register's own
+const PAGE_SIZE    = 50;
+
+const $ = s => document.querySelector(s);
+let SESSION = null, SORT = { col:"votes", desc:true }, OFFSET = 0, TOTAL = 0, RUN = 0, TIMER = null;
+
+/* ---------- auth: same shape as the register app, deliberately ---------- */
+const store = {
+  get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
+  set(k, v){ try{ localStorage.setItem(k, v); return true; }catch(e){ return false; } },
+  del(k){ try{ localStorage.removeItem(k); return true; }catch(e){ return false; } }
+};
+function loadSession(){
+  try{ SESSION = JSON.parse(store.get(SESSION_KEY) || "null"); }catch(e){ SESSION = null; }
+}
+function saveSession(s){
+  SESSION = s;
+  if(s) store.set(SESSION_KEY, JSON.stringify(s)); else store.del(SESSION_KEY);
+}
+function fromAuth(b){
+  saveSession({ access_token:b.access_token, refresh_token:b.refresh_token,
+                expires_at: Date.now() + (b.expires_in||3600)*1000 });
+}
+async function signIn(email, password){
+  const r = await fetch(AUTH_URL + "/token?grant_type=password", {
+    method:"POST", headers:{ apikey:SUPABASE_KEY, "Content-Type":"application/json" },
+    body: JSON.stringify({ email, password }) });
+  const b = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(b.error_description || b.msg || b.message || ("Sign-in failed ("+r.status+")"));
+  fromAuth(b);
+}
+async function refreshSession(){
+  if(!SESSION || !SESSION.refresh_token) return false;
+  const r = await fetch(AUTH_URL + "/token?grant_type=refresh_token", {
+    method:"POST", headers:{ apikey:SUPABASE_KEY, "Content-Type":"application/json" },
+    body: JSON.stringify({ refresh_token: SESSION.refresh_token }) }).catch(()=>null);
+  if(!r || !r.ok) return false;
+  fromAuth(await r.json());
+  return true;
+}
+async function api(query, headers){
+  if(SESSION && Date.now() > SESSION.expires_at - 60000) await refreshSession();
+  const send = () => fetch(TABLE_URL + query, { headers: Object.assign({
+    apikey: SUPABASE_KEY, Authorization: "Bearer " + (SESSION && SESSION.access_token) }, headers || {}) });
+  let r = await send();
+  if(r.status === 401 && await refreshSession()) r = await send();
+  if(r.status === 401){ saveSession(null); showSignIn("Please sign in again."); throw new Error("signed out"); }
+  if(!r.ok) throw new Error("The database refused the request (" + r.status + ").");
+  return r;
+}
+
+/* ---------- data ---------- */
+function filterQuery(){
+  const p = [];
+  const q = $("#q").value.trim();
+  const genre = $("#genre").value;
+  const minRating = parseFloat($("#minRating").value);
+  const minVotes = parseInt($("#minVotes").value, 10);
+  if(q) p.push("title=ilike." + encodeURIComponent("*" + q.replace(/[*,()]/g, " ") + "*"));
+  if(genre) p.push("genres=cs." + encodeURIComponent('{"' + genre + '"}'));
+  if(!isNaN(minRating)) p.push("rating=gte." + minRating);
+  if(!isNaN(minVotes)) p.push("votes=gte." + minVotes);
+  if($("#streaming").checked) p.push("movies_tmdb_details.streaming_us->flatrate=not.is.null");
+  return p;
+}
+async function load(){
+  const run = ++RUN;
+  $("#status").textContent = "Loading…";
+  const embed = "movies_tmdb_details" + ($("#streaming").checked ? "!inner" : "") +
+    "(release_date,original_language,spoken_languages,overview,keywords,collection,tmdb_rating,tmdb_votes,budget,revenue,studios,countries,streaming_us)";
+  const q = ["select=tconst,title,original_title,runtime_minutes,genres,rating,votes,directors,writers,principals," + embed].concat(filterQuery());
+  q.push("order=" + SORT.col + "." + (SORT.desc ? "desc" : "asc") + ".nullslast,tconst.asc");
+  q.push("limit=" + PAGE_SIZE, "offset=" + OFFSET);
+  try{
+    const r = await api("?" + q.join("&"), { Prefer:"count=exact" });
+    const rows = await r.json();
+    if(run !== RUN) return;
+    TOTAL = parseInt((r.headers.get("content-range") || "").split("/")[1], 10) || 0;
+    render(rows);
+  }catch(e){
+    if(run === RUN && e.message !== "signed out") $("#status").textContent = e.message;
+  }
+}
+async function loadGenres(){
+  const seen = new Set();
+  for(let from = 0; ; from += 1000){
+    const r = await api("?select=genres&order=tconst.asc&limit=1000&offset=" + from);
+    const rows = await r.json();
+    rows.forEach(m => (m.genres || []).forEach(g => seen.add(g)));
+    if(rows.length < 1000) break;
+  }
+  [...seen].sort().forEach(g => $("#genre").add(new Option(g, g)));
+}
+
+/* ---------- render: titles are data, so textContent, never innerHTML ---------- */
+function cell(row, text, cls){
+  const td = row.insertCell();
+  td.textContent = text;
+  if(cls) td.className = cls;
+  return td;
+}
+function line(parent, label, value, cls){
+  if(value === null || value === undefined || value === "") return;
+  const p = document.createElement(cls ? "div" : "p");
+  if(cls) p.className = cls;
+  p.textContent = label ? label + ": " + value : value;
+  parent.append(p);
+}
+const money = n => n ? "$" + Number(n).toLocaleString() : null;
+const list = a => a && a.length ? a.join(", ") : null;
+function tmdbDetails(cellEl, d){
+  if(!d) return;
+  const s = d.streaming_us || {};
+  line(cellEl, "Released", d.release_date, "sub");
+  line(cellEl, "Streaming (US)", list([...(s.flatrate || []), ...(s.ads || [])]), "sub");
+  line(cellEl, "Languages", list(d.spoken_languages) || d.original_language, "sub");
+  const more = document.createElement("details");
+  const label = document.createElement("summary");
+  label.textContent = "More";
+  more.append(label);
+  line(more, "", d.overview);
+  line(more, "Original language", d.original_language);
+  line(more, "Rent (US)", list(s.rent));
+  line(more, "Buy (US)", list(s.buy));
+  line(more, "Series", d.collection);
+  line(more, "Keywords", list(d.keywords));
+  line(more, "TMDB score", d.tmdb_votes ? Number(d.tmdb_rating).toFixed(1) + " from " + Number(d.tmdb_votes).toLocaleString() + " votes" : null);
+  line(more, "Budget", money(d.budget));
+  line(more, "Revenue", money(d.revenue));
+  line(more, "Studios", list(d.studios));
+  line(more, "Countries", list(d.countries));
+  cellEl.append(more);
+}
+function render(rows){
+  const body = $("#rows");
+  body.textContent = "";
+  rows.forEach(m => {
+    const tr = body.insertRow();
+    const t = tr.insertCell();
+    const a = document.createElement("a");
+    a.href = "https://www.imdb.com/title/" + encodeURIComponent(m.tconst) + "/";
+    a.target = "_blank"; a.rel = "noopener";
+    a.textContent = m.title;
+    t.append(a);
+    if(m.original_title && m.original_title !== m.title){
+      const s = document.createElement("div");
+      s.className = "sub"; s.textContent = m.original_title;
+      t.append(s);
+    }
+    const cast = [...new Set((m.principals || [])
+      .filter(p => p.category === "actor" || p.category === "actress" || p.category === "self")
+      .map(p => p.name))].slice(0, 5);
+    [["Director", m.directors], ["Writer", m.writers], ["Cast", cast]].forEach(([label, names]) => {
+      if(!names || !names.length) return;
+      const s = document.createElement("div");
+      s.className = "sub"; s.textContent = label + ": " + names.join(", ");
+      t.append(s);
+    });
+    tmdbDetails(t, m.movies_tmdb_details);
+    cell(tr, (m.genres || []).join(", "));
+    cell(tr, m.runtime_minutes ? m.runtime_minutes + " min" : "—", "num");
+    cell(tr, Number(m.rating).toFixed(1), "num");
+    cell(tr, Number(m.votes).toLocaleString(), "num");
+  });
+  const first = TOTAL ? OFFSET + 1 : 0, last = Math.min(OFFSET + PAGE_SIZE, TOTAL);
+  /* RLS hides rows rather than refusing, so another account sees an empty table. */
+  const filtered = $("#q").value.trim() || $("#genre").value || $("#streaming").checked
+    || parseFloat($("#minRating").value) > 5 || parseInt($("#minVotes").value, 10) > 100;
+  $("#status").textContent = TOTAL ? TOTAL.toLocaleString() + " films"
+    : filtered ? "No films match." : "No films visible. Only the superadmin account can read this table.";
+  $("#page").textContent = first.toLocaleString() + "–" + last.toLocaleString();
+  $("#prev").disabled = OFFSET === 0;
+  $("#next").disabled = OFFSET + PAGE_SIZE >= TOTAL;
+  document.querySelectorAll("th button").forEach(b => {
+    const on = b.dataset.sort === SORT.col;
+    b.textContent = b.textContent.replace(/ [▲▼]$/, "") + (on ? (SORT.desc ? " ▼" : " ▲") : "");
+    b.closest("th").setAttribute("aria-sort", on ? (SORT.desc ? "descending" : "ascending") : "none");
+  });
+}
+
+/* ---------- screens ---------- */
+function showSignIn(message){
+  $("#app").hidden = true;
+  $("#signin").hidden = false;
+  $("#signinError").textContent = message || "";
+}
+function showApp(){
+  $("#signin").hidden = true;
+  $("#app").hidden = false;
+  load();
+  if($("#genre").options.length === 1) loadGenres().catch(() => {});
+}
+function refilter(){
+  clearTimeout(TIMER);
+  TIMER = setTimeout(() => { OFFSET = 0; load(); }, 250);
+}
+
+$("#signin").addEventListener("submit", async e => {
+  e.preventDefault();
+  $("#signinError").textContent = "";
+  try{ await signIn($("#email").value, $("#password").value); $("#password").value = ""; showApp(); }
+  catch(err){ $("#signinError").textContent = err.message; }
+});
+$("#signout").addEventListener("click", () => { saveSession(null); showSignIn(); });
+["#q", "#minRating", "#minVotes"].forEach(s => $(s).addEventListener("input", refilter));
+$("#genre").addEventListener("change", refilter);
+$("#streaming").addEventListener("change", refilter);
+$("#prev").addEventListener("click", () => { OFFSET = Math.max(0, OFFSET - PAGE_SIZE); load(); });
+$("#next").addEventListener("click", () => { OFFSET += PAGE_SIZE; load(); });
+document.querySelectorAll("th button").forEach(b => b.addEventListener("click", () => {
+  const col = b.dataset.sort;
+  SORT = SORT.col === col ? { col, desc:!SORT.desc } : { col, desc: col !== "title" };
+  OFFSET = 0;
+  load();
+}));
+
+loadSession();
+if(SESSION) showApp(); else showSignIn();
+</script>
+</body>
+</html>

@@ -95,6 +95,7 @@ footer p{margin:0}
       <label class="check"><input id="streaming" type="checkbox"> On a US streaming service</label>
       <label class="check"><input id="onlyWatch" type="checkbox"> My watch list</label>
       <label class="check"><input id="onlyRated" type="checkbox"> Rated by me</label>
+      <button id="clearFilters" class="link" type="button">Clear filters</button>
       <div class="seg" role="group" aria-label="Not interested films">
         <button id="hideNot" type="button">Hide not interested</button>
         <button id="showNot" type="button">Show not interested</button>
@@ -299,8 +300,10 @@ function freshLayout(){ return { view:"table", order:COLUMNS.map(c => c.id), wid
 function loadLayout(){
   let l = null;
   try{ l = JSON.parse(store.get(LAYOUT_KEY) || "null"); }catch(e){ l = null; }
-  const base = freshLayout();
-  if(!l) return base;
+  return normalizeLayout(l);
+}
+function normalizeLayout(l){
+  if(!l) return freshLayout();
   const order = (l.order || []).filter(id => BY_ID[id]);
   COLUMNS.forEach((c, i) => { if(!order.includes(c.id)) order.splice(i, 0, c.id); });
   return { view: l.view === "detailed" ? "detailed" : "table", order, widths: l.widths || {},
@@ -308,7 +311,7 @@ function loadLayout(){
            hideNot: l.hideNot !== false, hideRated: !!l.hideRated };
 }
 let LAYOUT = loadLayout();
-const saveLayout = () => store.set(LAYOUT_KEY, JSON.stringify(LAYOUT));
+const saveLayout = () => { store.set(LAYOUT_KEY, JSON.stringify(LAYOUT)); savePrefs(); };
 const visible = () => LAYOUT.order.filter(id => !LAYOUT.hidden.includes(id)).map(id => BY_ID[id]);
 const widthOf = c => LAYOUT.widths[c.id] || c.w;
 
@@ -364,6 +367,51 @@ const DETAILED = [
   BY_ID.genres, BY_ID.runtime, BY_ID.rating, BY_ID.votes
 ];
 
+/* ---------- settings: kept on the account so every device and address shares them.
+   The title search is left out, so an old search can't quietly hide films. ---------- */
+const FILTER_DEFAULTS = { genre:"", minRating:"5", minVotes:"100", streaming:false, onlyWatch:false, onlyRated:false };
+let PREFS_READY = false, PREFS_FAILED = false, PREFS_TIMER = null, GENRES_DONE = false;
+function currentFilters(){
+  return { genre:$("#genre").value, minRating:$("#minRating").value, minVotes:$("#minVotes").value,
+           streaming:$("#streaming").checked, onlyWatch:$("#onlyWatch").checked, onlyRated:$("#onlyRated").checked };
+}
+function applyFilters(saved){
+  const f = Object.assign({}, FILTER_DEFAULTS, saved);
+  if(f.genre && ![...$("#genre").options].some(o => o.value === f.genre)) $("#genre").add(new Option(f.genre, f.genre));
+  $("#genre").value = f.genre;
+  $("#minRating").value = f.minRating;
+  $("#minVotes").value = f.minVotes;
+  $("#streaming").checked = !!f.streaming;
+  $("#onlyWatch").checked = !!f.onlyWatch;
+  $("#onlyRated").checked = !!f.onlyRated;
+}
+function savePrefs(){
+  if(!PREFS_READY) return;
+  clearTimeout(PREFS_TIMER);
+  PREFS_TIMER = setTimeout(async () => {
+    try{
+      await api("movies_settings?on_conflict=id", { method:"POST",
+        headers:{ "Content-Type":"application/json", Prefer:"resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify({ id:true, settings:{ layout:LAYOUT, sort:SORT, filters:currentFilters() },
+                               updated_at:new Date().toISOString() }) });
+    }catch(e){
+      if(e.message !== "signed out") setStatus("Settings not saved. " + e.message, true);
+    }
+  }, 600);
+}
+async function restorePrefs(){
+  const r = await api("movies_settings?select=settings&id=eq.true");
+  const rows = await r.json();
+  if(rows.length){
+    const s = rows[0].settings || {};
+    if(s.layout){ LAYOUT = normalizeLayout(s.layout); store.set(LAYOUT_KEY, JSON.stringify(LAYOUT)); }
+    if(s.sort && COLUMNS.some(c => c.sort === s.sort.col)) SORT = { col:s.sort.col, desc:!!s.sort.desc };
+    applyFilters(s.filters);
+  }
+  PREFS_READY = true;
+  PREFS_FAILED = false;
+}
+
 /* ---------- data ---------- */
 function filterQuery(){
   const p = [];
@@ -410,7 +458,9 @@ async function loadGenres(){
     rows.forEach(m => (m.genres || []).forEach(g => seen.add(g)));
     if(rows.length < 1000) break;
   }
-  [...seen].sort().forEach(g => $("#genre").add(new Option(g, g)));
+  const have = new Set([...$("#genre").options].map(o => o.value));
+  [...seen].sort().forEach(g => { if(!have.has(g)) $("#genre").add(new Option(g, g)); });
+  GENRES_DONE = true;
 }
 
 /* ---------- render: titles are data, so textContent, never innerHTML ---------- */
@@ -427,6 +477,7 @@ function headCell(c, table){
     b.addEventListener("click", () => {
       SORT = SORT.col === c.sort ? { col:c.sort, desc:!SORT.desc } : { col:c.sort, desc:!c.asc };
       OFFSET = 0;
+      savePrefs();
       load();
     });
     th.append(b);
@@ -579,6 +630,7 @@ function render(){
     || parseFloat($("#minRating").value) > 5 || parseInt($("#minVotes").value, 10) > 100;
   setStatus(TOTAL ? TOTAL.toLocaleString() + " films"
     : filtered ? "No films match." : "No films visible. Only the superadmin account can read this table.");
+  if(PREFS_FAILED) setStatus($("#status").textContent + " Your saved settings didn't load, so changes won't be remembered. Reload to try again.", true);
   $("#page").textContent = first.toLocaleString() + "–" + last.toLocaleString();
   $("#prev").disabled = OFFSET === 0;
   $("#next").disabled = OFFSET + PAGE_SIZE >= TOTAL;
@@ -600,13 +652,21 @@ function showSignIn(message){
   $("#signin").hidden = false;
   $("#signinError").textContent = message || "";
 }
-function showApp(){
+async function showApp(){
   $("#signin").hidden = true;
   $("#app").hidden = false;
+  setStatus("Loading…");
+  try{ await restorePrefs(); }
+  catch(e){
+    if(e.message === "signed out") return;
+    /* Saving stays off: defaults must never overwrite settings that failed to load. */
+    PREFS_FAILED = true;
+  }
   load();
-  if($("#genre").options.length === 1) loadGenres().catch(() => {});
+  if(!GENRES_DONE) loadGenres().catch(() => {});
 }
 function refilter(){
+  savePrefs();
   clearTimeout(TIMER);
   TIMER = setTimeout(() => { OFFSET = 0; load(); }, 250);
 }
@@ -633,6 +693,11 @@ $("#signout").addEventListener("click", () => { saveSession(null); showSignIn();
 ["#genre", "#streaming", "#onlyWatch", "#onlyRated"].forEach(s => $(s).addEventListener("change", refilter));
 $("#prev").addEventListener("click", () => { OFFSET = Math.max(0, OFFSET - PAGE_SIZE); load(); });
 $("#next").addEventListener("click", () => { OFFSET += PAGE_SIZE; load(); });
+$("#clearFilters").addEventListener("click", () => {
+  $("#q").value = "";
+  applyFilters({});
+  refilter();
+});
 $("#scrollLeft").addEventListener("click", () => scrollGrid(-1));
 $("#scrollRight").addEventListener("click", () => scrollGrid(1));
 $("#wrap").addEventListener("scroll", updateScrollers);

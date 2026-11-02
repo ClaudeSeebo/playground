@@ -18,7 +18,7 @@ input,select,button{font:inherit;color:var(--ink);background:var(--panel);border
 button{cursor:pointer}
 button:disabled{opacity:.5;cursor:default}
 button.link{border:0;background:none;color:var(--accent);padding:0}
-.filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:8px 12px;margin-bottom:8px}
+.filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;gap:8px 12px;margin-bottom:8px}
 .bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;margin-bottom:8px}
 .scrollers{display:inline-flex;gap:6px}
 .check{flex-direction:row;align-items:center;gap:6px}
@@ -87,6 +87,7 @@ footer p{margin:0}
     </header>
     <div class="filters">
       <label class="wide">Title <input id="q" type="search" placeholder="Search titles"></label>
+      <label>Year <select id="year"><option value="">All years</option></select></label>
       <label>Genre <select id="genre"><option value="">All genres</option></select></label>
       <label>Minimum rating <input id="minRating" type="number" min="5" max="10" step="0.1" value="5"></label>
       <label>Minimum votes <input id="minVotes" type="number" min="100" step="100" value="100"></label>
@@ -369,14 +370,16 @@ const DETAILED = [
 
 /* ---------- settings: kept on the account so every device and address shares them.
    The title search is left out, so an old search can't quietly hide films. ---------- */
-const FILTER_DEFAULTS = { genre:"", minRating:"5", minVotes:"100", streaming:false, onlyWatch:false, onlyRated:false };
-let PREFS_READY = false, PREFS_FAILED = false, PREFS_TIMER = null, GENRES_DONE = false;
+const FILTER_DEFAULTS = { year:"", genre:"", minRating:"5", minVotes:"100", streaming:false, onlyWatch:false, onlyRated:false };
+let PREFS_READY = false, PREFS_FAILED = false, PREFS_TIMER = null, CHOICES_DONE = false;
 function currentFilters(){
-  return { genre:$("#genre").value, minRating:$("#minRating").value, minVotes:$("#minVotes").value,
+  return { year:$("#year").value, genre:$("#genre").value, minRating:$("#minRating").value, minVotes:$("#minVotes").value,
            streaming:$("#streaming").checked, onlyWatch:$("#onlyWatch").checked, onlyRated:$("#onlyRated").checked };
 }
 function applyFilters(saved){
   const f = Object.assign({}, FILTER_DEFAULTS, saved);
+  if(f.year && ![...$("#year").options].some(o => o.value === f.year)) $("#year").add(new Option(f.year, f.year));
+  $("#year").value = f.year;
   if(f.genre && ![...$("#genre").options].some(o => o.value === f.genre)) $("#genre").add(new Option(f.genre, f.genre));
   $("#genre").value = f.genre;
   $("#minRating").value = f.minRating;
@@ -416,10 +419,12 @@ async function restorePrefs(){
 function filterQuery(){
   const p = [];
   const q = $("#q").value.trim();
+  const year = parseInt($("#year").value, 10);
   const genre = $("#genre").value;
   const minRating = parseFloat($("#minRating").value);
   const minVotes = parseInt($("#minVotes").value, 10);
   if(q) p.push("title=ilike." + encodeURIComponent("*" + q.replace(/[*,()]/g, " ") + "*"));
+  if(!isNaN(year)) p.push("year=eq." + year);
   if(genre) p.push("genres=cs." + encodeURIComponent('{"' + genre + '"}'));
   if(!isNaN(minRating)) p.push("rating=gte." + minRating);
   if(!isNaN(minVotes)) p.push("votes=gte." + minVotes);
@@ -450,17 +455,23 @@ async function load(){
     if(run === RUN && e.message !== "signed out") setStatus(e.message, true);
   }
 }
-async function loadGenres(){
-  const seen = new Set();
+async function loadChoices(){
+  const seen = new Set(), years = new Set();
   for(let from = 0; ; from += 1000){
-    const r = await api("movies_imdb_titles?select=genres&order=tconst.asc&limit=1000&offset=" + from);
+    const r = await api("movies_imdb_titles?select=genres,year&order=tconst.asc&limit=1000&offset=" + from);
     const rows = await r.json();
-    rows.forEach(m => (m.genres || []).forEach(g => seen.add(g)));
+    rows.forEach(m => { years.add(String(m.year)); (m.genres || []).forEach(g => seen.add(g)); });
     if(rows.length < 1000) break;
   }
   const have = new Set([...$("#genre").options].map(o => o.value));
   [...seen].sort().forEach(g => { if(!have.has(g)) $("#genre").add(new Option(g, g)); });
-  GENRES_DONE = true;
+  /* Rebuilt rather than added to, so a year restored early still lands in order. */
+  const pick = $("#year").value;
+  if(pick) years.add(pick);
+  $("#year").length = 1;
+  [...years].sort().reverse().forEach(y => $("#year").add(new Option(y, y)));
+  $("#year").value = pick;
+  CHOICES_DONE = true;
 }
 
 /* ---------- render: titles are data, so textContent, never innerHTML ---------- */
@@ -625,7 +636,7 @@ function render(){
   if(table) renderColumnList();
   const first = TOTAL ? OFFSET + 1 : 0, last = Math.min(OFFSET + PAGE_SIZE, TOTAL);
   /* RLS hides rows rather than refusing, so another account sees an empty table. */
-  const filtered = $("#q").value.trim() || $("#genre").value || $("#streaming").checked
+  const filtered = $("#q").value.trim() || $("#year").value || $("#genre").value || $("#streaming").checked
     || $("#onlyWatch").checked || $("#onlyRated").checked || LAYOUT.hideRated
     || parseFloat($("#minRating").value) > 5 || parseInt($("#minVotes").value, 10) > 100;
   setStatus(TOTAL ? TOTAL.toLocaleString() + " films"
@@ -663,7 +674,7 @@ async function showApp(){
     PREFS_FAILED = true;
   }
   load();
-  if(!GENRES_DONE) loadGenres().catch(() => {});
+  if(!CHOICES_DONE) loadChoices().catch(() => {});
 }
 function refilter(){
   savePrefs();
@@ -690,7 +701,7 @@ $("#signin").addEventListener("submit", async e => {
 });
 $("#signout").addEventListener("click", () => { saveSession(null); showSignIn(); });
 ["#q", "#minRating", "#minVotes"].forEach(s => $(s).addEventListener("input", refilter));
-["#genre", "#streaming", "#onlyWatch", "#onlyRated"].forEach(s => $(s).addEventListener("change", refilter));
+["#year", "#genre", "#streaming", "#onlyWatch", "#onlyRated"].forEach(s => $(s).addEventListener("change", refilter));
 $("#prev").addEventListener("click", () => { OFFSET = Math.max(0, OFFSET - PAGE_SIZE); load(); });
 $("#next").addEventListener("click", () => { OFFSET += PAGE_SIZE; load(); });
 $("#clearFilters").addEventListener("click", () => {

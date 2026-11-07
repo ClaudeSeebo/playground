@@ -144,10 +144,11 @@ const REST_URL     = SUPABASE_URL + "/rest/v1/";
 const SESSION_KEY  = "cct.movies.session";   // separate from the register's own
 const LAYOUT_KEY   = "cct.movies.layout.v1";
 const PAGE_SIZE    = 50;
-const TMDB = "movies_tmdb_details";
 const MINE = "movies_my_list";
-const BROWSE = "movies_browse";   // films with my list flattened on, so hiding covers films with no list row
-const TMDB_FIELDS = "release_date,original_language,spoken_languages,overview,keywords,collection,tmdb_rating,tmdb_votes,budget,revenue,studios,countries,streaming_us";
+/* Films with my list and TMDB's fields flattened on (migration 44), so hiding covers
+   films with no list row and a page reads TMDB's long fields for 50 films, not all. */
+const BROWSE = "movies_browse";
+const TMDB_FIELDS = "tmdb_id,release_date,original_language,spoken_languages,overview,keywords,collection,tmdb_rating,tmdb_votes,budget,revenue,studios,countries,streaming_us";
 
 const $ = s => document.querySelector(s);
 let SESSION = null, SORT = { col:"votes", desc:true }, OFFSET = 0, TOTAL = 0, RUN = 0, TIMER = null, ROWS = [];
@@ -202,7 +203,7 @@ async function api(path, opts){
 const list = a => a && a.length ? a.join(", ") : "";
 const money = n => n ? "$" + Number(n).toLocaleString() : "";
 const count = n => n === null || n === undefined ? "" : Number(n).toLocaleString();
-const tm = m => m[TMDB] || {};
+const tm = m => m.tmdb_id == null ? {} : m;   // no TMDB match: every TMDB field shows blank
 const st = m => tm(m).streaming_us || {};
 const people = (m, cats) => [...new Set((m.principals || []).filter(p => cats.includes(p.category)).map(p => p.name))];
 const CAST = ["actor", "actress", "self"];
@@ -270,13 +271,13 @@ const COLUMNS = [
   { id:"title",    label:"Title",          w:230, node:titleLink, sort:"title", asc:true },
   { id:"original", label:"Original title", w:180, text:m => m.original_title, sort:"original_title", asc:true },
   { id:"year",     label:"Year",           w:70,  text:m => m.year, sort:"year", num:true },
-  { id:"released", label:"Released",       w:110, text:m => tm(m).release_date, sort:TMDB + "(release_date)" },
+  { id:"released", label:"Released",       w:110, text:m => tm(m).release_date, sort:"release_date" },
   { id:"runtime",  label:"Runtime",        w:90,  text:m => m.runtime_minutes ? m.runtime_minutes + " min" : "", sort:"runtime_minutes", num:true },
   { id:"genres",   label:"Genres",         w:160, text:m => list(m.genres) },
   { id:"rating",   label:"IMDb rating",    w:100, text:m => Number(m.rating).toFixed(1), sort:"rating", num:true },
   { id:"votes",    label:"IMDb votes",     w:100, text:m => count(m.votes), sort:"votes", num:true },
-  { id:"tscore",   label:"TMDB score",     w:100, text:m => tm(m).tmdb_votes ? Number(tm(m).tmdb_rating).toFixed(1) : "", sort:TMDB + "(tmdb_rating)", num:true },
-  { id:"tvotes",   label:"TMDB votes",     w:100, text:m => count(tm(m).tmdb_votes), sort:TMDB + "(tmdb_votes)", num:true },
+  { id:"tscore",   label:"TMDB score",     w:100, text:m => tm(m).tmdb_votes ? Number(tm(m).tmdb_rating).toFixed(1) : "", sort:"tmdb_rating", num:true },
+  { id:"tvotes",   label:"TMDB votes",     w:100, text:m => count(tm(m).tmdb_votes), sort:"tmdb_votes", num:true },
   { id:"director", label:"Director",       w:170, text:m => list(m.directors) },
   { id:"writer",   label:"Writer",         w:170, text:m => list(m.writers) },
   { id:"cast",     label:"Cast",           w:220, text:m => list(people(m, CAST)) },
@@ -285,13 +286,13 @@ const COLUMNS = [
   { id:"ads",      label:"With ads (US)",  w:160, text:m => list(st(m).ads) },
   { id:"rent",     label:"Rent (US)",      w:160, text:m => list(st(m).rent) },
   { id:"buy",      label:"Buy (US)",       w:160, text:m => list(st(m).buy) },
-  { id:"language", label:"Original language", w:130, text:m => tm(m).original_language, sort:TMDB + "(original_language)", asc:true },
+  { id:"language", label:"Original language", w:130, text:m => tm(m).original_language, sort:"original_language", asc:true },
   { id:"spoken",   label:"Languages",      w:150, text:m => list(tm(m).spoken_languages) },
   { id:"plot",     label:"Plot",           w:320, text:m => tm(m).overview },
   { id:"keywords", label:"Keywords",       w:220, text:m => list(tm(m).keywords) },
-  { id:"series",   label:"Series",         w:170, text:m => tm(m).collection, sort:TMDB + "(collection)", asc:true },
-  { id:"budget",   label:"Budget",         w:120, text:m => money(tm(m).budget), sort:TMDB + "(budget)", num:true },
-  { id:"revenue",  label:"Revenue",        w:120, text:m => money(tm(m).revenue), sort:TMDB + "(revenue)", num:true },
+  { id:"series",   label:"Series",         w:170, text:m => tm(m).collection, sort:"collection", asc:true },
+  { id:"budget",   label:"Budget",         w:120, text:m => money(tm(m).budget), sort:"budget", num:true },
+  { id:"revenue",  label:"Revenue",        w:120, text:m => money(tm(m).revenue), sort:"revenue", num:true },
   { id:"studios",  label:"Studios",        w:200, text:m => list(tm(m).studios) },
   { id:"countries",label:"Countries",      w:150, text:m => list(tm(m).countries) },
   { id:"imdbid",   label:"IMDb id",        w:110, text:m => m.tconst, sort:"tconst", asc:true }
@@ -330,8 +331,8 @@ function detailCell(m){
   add("Director", list(m.directors));
   add("Writer", list(m.writers));
   add("Cast", list(people(m, CAST).slice(0, 5)));
-  const d = m[TMDB];
-  if(d){
+  const d = tm(m);
+  if(m.tmdb_id != null){
     const s = st(m);
     add("Released", d.release_date);
     add("Streaming (US)", list([...(s.flatrate || []), ...(s.ads || [])]));
@@ -408,7 +409,9 @@ async function restorePrefs(){
   if(rows.length){
     const s = rows[0].settings || {};
     if(s.layout){ LAYOUT = normalizeLayout(s.layout); store.set(LAYOUT_KEY, JSON.stringify(LAYOUT)); }
-    if(s.sort && COLUMNS.some(c => c.sort === s.sort.col)) SORT = { col:s.sort.col, desc:!!s.sort.desc };
+    /* Sorts saved before migration 44 name TMDB columns as "movies_tmdb_details(x)". */
+    const col = s.sort && String(s.sort.col).replace(/^movies_tmdb_details\((\w+)\)$/, "$1");
+    if(col && COLUMNS.some(c => c.sort === col)) SORT = { col, desc:!!s.sort.desc };
     applyFilters(s.filters);
   }
   PREFS_READY = true;
@@ -428,7 +431,7 @@ function filterQuery(){
   if(genre) p.push("genres=cs." + encodeURIComponent('{"' + genre + '"}'));
   if(!isNaN(minRating)) p.push("rating=gte." + minRating);
   if(!isNaN(minVotes)) p.push("votes=gte." + minVotes);
-  if($("#streaming").checked) p.push(TMDB + ".streaming_us->flatrate=not.is.null");
+  if($("#streaming").checked) p.push("streams_us=is.true");
   if($("#onlyWatch").checked) p.push("on_watchlist=is.true");
   if(LAYOUT.hideNot) p.push("not_interested=is.false");
   /* "Rated by me" asks for exactly what the hide switch would remove, so it wins. */
@@ -439,8 +442,7 @@ function filterQuery(){
 async function load(){
   const run = ++RUN;
   setStatus("Loading…");
-  const select = "select=tconst,title,original_title,year,runtime_minutes,genres,rating,votes,directors,writers,principals,on_watchlist,not_interested,my_rating," +
-    TMDB + ($("#streaming").checked ? "!inner" : "") + "(" + TMDB_FIELDS + ")";
+  const select = "select=tconst,title,original_title,year,runtime_minutes,genres,rating,votes,directors,writers,principals,on_watchlist,not_interested,my_rating," + TMDB_FIELDS;
   const q = [select].concat(filterQuery());
   q.push("order=" + SORT.col + "." + (SORT.desc ? "desc" : "asc") + ".nullslast,tconst.asc");
   q.push("limit=" + PAGE_SIZE, "offset=" + OFFSET);
@@ -457,12 +459,9 @@ async function load(){
 }
 async function loadChoices(){
   const seen = new Set(), years = new Set();
-  for(let from = 0; ; from += 1000){
-    const r = await api("movies_imdb_titles?select=genres,year&order=tconst.asc&limit=1000&offset=" + from);
-    const rows = await r.json();
-    rows.forEach(m => { years.add(String(m.year)); (m.genres || []).forEach(g => seen.add(g)); });
-    if(rows.length < 1000) break;
-  }
+  /* One read of every year and genre (migration 44), not a walk through every film. */
+  const r = await api("movies_choices?select=kind,value");
+  (await r.json()).forEach(c => (c.kind === "year" ? years : seen).add(c.value));
   const have = new Set([...$("#genre").options].map(o => o.value));
   [...seen].sort().forEach(g => { if(!have.has(g)) $("#genre").add(new Option(g, g)); });
   /* Rebuilt rather than added to, so a year restored early still lands in order. */

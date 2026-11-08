@@ -89,6 +89,7 @@ footer p{margin:0}
       <label class="wide">Title <input id="q" type="search" placeholder="Search titles"></label>
       <label>Year <select id="year"><option value="">All years</option></select></label>
       <label>Genre <select id="genre"><option value="">All genres</option></select></label>
+      <label>Premiered at <select id="festival"><option value="">All films</option><option value="any">Any of the three</option><option value="cannes">Cannes</option><option value="tiff">TIFF</option><option value="sundance">Sundance</option></select></label>
       <label>Minimum rating <input id="minRating" type="number" min="5" max="10" step="0.1" value="5"></label>
       <label>Minimum votes <input id="minVotes" type="number" min="100" step="100" value="100"></label>
     </div>
@@ -133,6 +134,7 @@ footer p{margin:0}
     <p class="tmdb"><img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg" alt="TMDB" width="72" height="10">
     This application uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.</p>
     <p>Streaming availability data from JustWatch.</p>
+    <p>Festival premieres worked out from Wikipedia's festival pages and Wikidata.</p>
   </footer>
 </main>
 
@@ -148,6 +150,9 @@ const MINE = "movies_my_list";
 /* Films with my list and TMDB's fields flattened on (migration 44), so hiding covers
    films with no list row and a page reads TMDB's long fields for 50 films, not all. */
 const BROWSE = "movies_browse";
+/* Where a film premiered, by Seebo's first-of-the-three rule (migration 45). */
+const FESTIVALS = { cannes:"Cannes", tiff:"TIFF", sundance:"Sundance" };
+const fest = m => FESTIVALS[m.festival] ? FESTIVALS[m.festival] + " " + m.festival_year : "";
 const TMDB_FIELDS = "tmdb_id,release_date,original_language,spoken_languages,overview,keywords,collection,tmdb_rating,tmdb_votes,budget,revenue,studios,countries,streaming_us";
 
 const $ = s => document.querySelector(s);
@@ -272,7 +277,8 @@ const COLUMNS = [
   { id:"original", label:"Original title", w:180, text:m => m.original_title, sort:"original_title", asc:true },
   { id:"year",     label:"Year",           w:70,  text:m => m.year, sort:"year", num:true },
   { id:"released", label:"Released",       w:110, text:m => tm(m).release_date, sort:"release_date" },
-  { id:"runtime",  label:"Runtime",        w:90,  text:m => m.runtime_minutes ? m.runtime_minutes + " min" : "", sort:"runtime_minutes", num:true },
+  { id:"festival", label:"Premiered at",   w:130, text:m => fest(m), sort:"festival", asc:true },
+  { id:"runtime",  label:"Runtime",       w:90,  text:m => m.runtime_minutes ? m.runtime_minutes + " min" : "", sort:"runtime_minutes", num:true },
   { id:"genres",   label:"Genres",         w:160, text:m => list(m.genres) },
   { id:"rating",   label:"IMDb rating",    w:100, text:m => Number(m.rating).toFixed(1), sort:"rating", num:true },
   { id:"votes",    label:"IMDb votes",     w:100, text:m => count(m.votes), sort:"votes", num:true },
@@ -331,6 +337,7 @@ function detailCell(m){
   add("Director", list(m.directors));
   add("Writer", list(m.writers));
   add("Cast", list(people(m, CAST).slice(0, 5)));
+  add("Premiered at", fest(m));
   const d = tm(m);
   if(m.tmdb_id != null){
     const s = st(m);
@@ -371,10 +378,10 @@ const DETAILED = [
 
 /* ---------- settings: kept on the account so every device and address shares them.
    The title search is left out, so an old search can't quietly hide films. ---------- */
-const FILTER_DEFAULTS = { year:"", genre:"", minRating:"5", minVotes:"100", streaming:false, onlyWatch:false, onlyRated:false };
+const FILTER_DEFAULTS = { year:"", genre:"", festival:"", minRating:"5", minVotes:"100", streaming:false, onlyWatch:false, onlyRated:false };
 let PREFS_READY = false, PREFS_FAILED = false, PREFS_TIMER = null, CHOICES_DONE = false;
 function currentFilters(){
-  return { year:$("#year").value, genre:$("#genre").value, minRating:$("#minRating").value, minVotes:$("#minVotes").value,
+  return { year:$("#year").value, genre:$("#genre").value, festival:$("#festival").value, minRating:$("#minRating").value, minVotes:$("#minVotes").value,
            streaming:$("#streaming").checked, onlyWatch:$("#onlyWatch").checked, onlyRated:$("#onlyRated").checked };
 }
 function applyFilters(saved){
@@ -383,6 +390,7 @@ function applyFilters(saved){
   $("#year").value = f.year;
   if(f.genre && ![...$("#genre").options].some(o => o.value === f.genre)) $("#genre").add(new Option(f.genre, f.genre));
   $("#genre").value = f.genre;
+  $("#festival").value = [...$("#festival").options].some(o => o.value === f.festival) ? f.festival : "";
   $("#minRating").value = f.minRating;
   $("#minVotes").value = f.minVotes;
   $("#streaming").checked = !!f.streaming;
@@ -429,6 +437,9 @@ function filterQuery(){
   if(q) p.push("title=ilike." + encodeURIComponent("*" + q.replace(/[*,()]/g, " ") + "*"));
   if(!isNaN(year)) p.push("year=eq." + year);
   if(genre) p.push("genres=cs." + encodeURIComponent('{"' + genre + '"}'));
+  const festival = $("#festival").value;
+  if(festival === "any") p.push("festival=not.is.null");
+  else if(FESTIVALS[festival]) p.push("festival=eq." + festival);
   if(!isNaN(minRating)) p.push("rating=gte." + minRating);
   if(!isNaN(minVotes)) p.push("votes=gte." + minVotes);
   if($("#streaming").checked) p.push("streams_us=is.true");
@@ -442,7 +453,7 @@ function filterQuery(){
 async function load(){
   const run = ++RUN;
   setStatus("Loading…");
-  const select = "select=tconst,title,original_title,year,runtime_minutes,genres,rating,votes,directors,writers,principals,on_watchlist,not_interested,my_rating," + TMDB_FIELDS;
+  const select = "select=tconst,title,original_title,year,runtime_minutes,genres,rating,votes,directors,writers,principals,on_watchlist,not_interested,my_rating,festival,festival_year," + TMDB_FIELDS;
   const q = [select].concat(filterQuery());
   q.push("order=" + SORT.col + "." + (SORT.desc ? "desc" : "asc") + ".nullslast,tconst.asc");
   q.push("limit=" + PAGE_SIZE, "offset=" + OFFSET);
@@ -635,7 +646,7 @@ function render(){
   if(table) renderColumnList();
   const first = TOTAL ? OFFSET + 1 : 0, last = Math.min(OFFSET + PAGE_SIZE, TOTAL);
   /* RLS hides rows rather than refusing, so another account sees an empty table. */
-  const filtered = $("#q").value.trim() || $("#year").value || $("#genre").value || $("#streaming").checked
+  const filtered = $("#q").value.trim() || $("#year").value || $("#genre").value || $("#festival").value || $("#streaming").checked
     || $("#onlyWatch").checked || $("#onlyRated").checked || LAYOUT.hideRated
     || parseFloat($("#minRating").value) > 5 || parseInt($("#minVotes").value, 10) > 100;
   setStatus(TOTAL ? TOTAL.toLocaleString() + " films"
@@ -700,7 +711,7 @@ $("#signin").addEventListener("submit", async e => {
 });
 $("#signout").addEventListener("click", () => { saveSession(null); showSignIn(); });
 ["#q", "#minRating", "#minVotes"].forEach(s => $(s).addEventListener("input", refilter));
-["#year", "#genre", "#streaming", "#onlyWatch", "#onlyRated"].forEach(s => $(s).addEventListener("change", refilter));
+["#year", "#genre", "#festival", "#streaming", "#onlyWatch", "#onlyRated"].forEach(s => $(s).addEventListener("change", refilter));
 $("#prev").addEventListener("click", () => { OFFSET = Math.max(0, OFFSET - PAGE_SIZE); load(); });
 $("#next").addEventListener("click", () => { OFFSET += PAGE_SIZE; load(); });
 $("#clearFilters").addEventListener("click", () => {
